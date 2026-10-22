@@ -1,8 +1,10 @@
 /* =========================================================================
- * storage.js
- * 瀏覽器 localStorage 持久化模組。
- * 負責：讀取、儲存、匯出、匯入、格式防呆與自動種子資料初始化。
- * 可在瀏覽器（window.GpaStorage）與 Node.js（module.exports，配合記憶體後備）執行。
+ * storage.js — 瀏覽器 localStorage 持久化模組（2.0 Batch 1.1）
+ *
+ * 新增：
+ *  - 每個實體（學期/科目/評核）都有穩定 uid（跨裝置識別，用於安全合併）
+ *  - ensureUids()：為舊資料補上 uid 與關聯 uid（termUid / courseUid），純函式
+ *  - 多版本備份（最多 5 份，含時間戳與原因），並在 localStorage 空間不足時回報失敗
  * ========================================================================= */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(root);
@@ -11,10 +13,10 @@
   'use strict';
 
   var STORAGE_KEY = 'gpa-tracker-data';
-  var BACKUP_KEY = 'gpa-tracker-backup';
+  var BACKUPS_KEY = 'gpa-tracker-backups';
+  var MAX_BACKUPS = 5;
   var SCHEMA_VERSION = 1;
 
-  // --- 種子資料取得（瀏覽器用全域 GpaSeed；Node 用 require） ---
   function getSeed() {
     if (typeof root !== 'undefined' && root.GpaSeed) return root.GpaSeed;
     if (typeof require === 'function') {
@@ -23,8 +25,8 @@
     return null;
   }
 
-  // --- 儲存後端（瀏覽器用 localStorage，否則回傳 null 走記憶體） ---
   var memory = null;
+  var memoryBackups = [];
   function backend() {
     try {
       if (typeof localStorage !== 'undefined') return localStorage;
@@ -32,8 +34,38 @@
     return null;
   }
 
-  function clone(data) {
-    return JSON.parse(JSON.stringify(data));
+  function clone(data) { return JSON.parse(JSON.stringify(data)); }
+
+  // ---------- 穩定 uid ----------
+  function genUid() {
+    try {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    } catch (e) { /* ignore */ }
+    return 'u-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  // 為每個實體補上 uid，並由整數關聯推導 termUid / courseUid（舊資料相容）。純函式。
+  function ensureUids(state) {
+    var src = state || {};
+    var terms = (src.terms || []).map(function (t) {
+      return Object.assign({}, t, { uid: t.uid || genUid() });
+    });
+    var termById = {};
+    terms.forEach(function (t) { termById[t.id] = t; });
+
+    var courses = (src.courses || []).map(function (c) {
+      var termUid = c.termUid || (termById[c.termId] ? termById[c.termId].uid : null);
+      return Object.assign({}, c, { uid: c.uid || genUid(), termUid: termUid });
+    });
+    var courseById = {};
+    courses.forEach(function (c) { courseById[c.id] = c; });
+
+    var assessments = (src.assessments || []).map(function (a) {
+      var courseUid = a.courseUid || (courseById[a.courseId] ? courseById[a.courseId].uid : null);
+      return Object.assign({}, a, { uid: a.uid || genUid(), courseUid: courseUid });
+    });
+
+    return { version: SCHEMA_VERSION, terms: terms, courses: courses, assessments: assessments };
   }
 
   function emptyState() {
@@ -41,57 +73,90 @@
     var terms = seed ? clone(seed.terms) : [];
     var courses = seed ? clone(seed.courses) : [];
     var assessments = seed ? clone(seed.assessments) : [];
-    return { version: SCHEMA_VERSION, terms: terms, courses: courses, assessments: assessments };
+    return ensureUids({ version: SCHEMA_VERSION, terms: terms, courses: courses, assessments: assessments });
   }
 
-  // 取得可選範本（例如 IT114105 課程）
   function template() {
     var seed = getSeed();
     if (seed && seed.template) return clone(seed.template);
     return { terms: [], courses: [], assessments: [] };
   }
 
-  // ---------- 安全備份（雲端寫入前 / 清空 / 匯入前）----------
-  var memoryBackup = null;
-  function saveBackup(state) {
+  // ---------- 多版本備份 ----------
+  // 回傳 { ok:true, count } 或 { ok:false, error }；空間不足不會假裝成功。
+  function saveBackup(state, reason) {
     var store = backend();
-    var payload = JSON.stringify({ savedAt: new Date().toISOString(), state: clone(state) });
-    if (store) {
-      try { store.setItem(BACKUP_KEY, payload); return true; } catch (e) { return false; }
+    var entry = { savedAt: new Date().toISOString(), reason: reason || 'manual', state: clone(state) };
+    if (!store) {
+      memoryBackups.unshift(entry);
+      memoryBackups = memoryBackups.slice(0, MAX_BACKUPS);
+      return { ok: true, count: memoryBackups.length };
     }
-    memoryBackup = payload;
-    return true;
-  }
-
-  function loadBackup() {
-    var store = backend();
-    var raw = null;
-    if (store) {
-      try { raw = store.getItem(BACKUP_KEY); } catch (e) { raw = null; }
-    } else {
-      raw = memoryBackup;
-    }
-    if (!raw) return null;
+    var list = [];
     try {
-      var parsed = JSON.parse(raw);
-      if (!parsed || !parsed.state) return null;
-      return { savedAt: parsed.savedAt, state: normalize(parsed.state) || parsed.state };
-    } catch (e) { return null; }
+      var raw = store.getItem(BACKUPS_KEY);
+      if (raw) { var parsed = JSON.parse(raw); if (Array.isArray(parsed)) list = parsed; }
+    } catch (e) { list = []; }
+    list.unshift(entry);
+    list = list.slice(0, MAX_BACKUPS);
+    try {
+      store.setItem(BACKUPS_KEY, JSON.stringify(list));
+      return { ok: true, count: list.length };
+    } catch (e) {
+      var quota = e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
+      return { ok: false, error: quota ? '本機儲存空間不足，備份未建立' : ('備份失敗：' + (e && e.message ? e.message : String(e))) };
+    }
   }
 
-  // 驗證並正規化外來資料形狀；無效回傳 null
+  function readBackups() {
+    var store = backend();
+    if (store) {
+      try {
+        var raw = store.getItem(BACKUPS_KEY);
+        if (!raw) return [];
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) { return []; }
+    }
+    return memoryBackups.slice();
+  }
+
+  // 只回傳中繼資料（供 UI 列表），不含完整 state
+  function listBackups() {
+    return readBackups().map(function (b, i) {
+      return {
+        index: i,
+        savedAt: b.savedAt,
+        reason: b.reason,
+        terms: (b.state && b.state.terms || []).length,
+        courses: (b.state && b.state.courses || []).length,
+        assessments: (b.state && b.state.assessments || []).length
+      };
+    });
+  }
+
+  function loadBackup(index) {
+    var list = readBackups();
+    var i = (typeof index === 'number' && index >= 0 && index < list.length) ? index : 0;
+    var b = list[i];
+    if (!b || !b.state) return null;
+    return { savedAt: b.savedAt, reason: b.reason, state: ensureUids(b.state) };
+  }
+
+  function clearBackups() {
+    var store = backend();
+    if (store) { try { store.removeItem(BACKUPS_KEY); } catch (e) { /* ignore */ } }
+    memoryBackups = [];
+  }
+
+  // ---------- 驗證 ----------
   function normalize(data) {
     if (!data || typeof data !== 'object') return null;
     if (!Array.isArray(data.terms) || !Array.isArray(data.courses) || !Array.isArray(data.assessments)) return null;
-    return {
-      version: SCHEMA_VERSION,
-      terms: data.terms,
-      courses: data.courses,
-      assessments: data.assessments
-    };
+    return ensureUids({ version: SCHEMA_VERSION, terms: data.terms, courses: data.courses, assessments: data.assessments });
   }
 
-  // 從 localStorage（或記憶體後備）讀取狀態；無效或不存在則回種子資料
+  // ---------- 讀寫 ----------
   function load() {
     var store = backend();
     if (store) {
@@ -104,12 +169,12 @@
           if (norm) return norm;
         } catch (e) { /* 損毀則回種子 */ }
       }
+    } else if (memory) {
+      return ensureUids(memory);
     }
-    if (memory) return memory;
     return emptyState();
   }
 
-  // 寫入狀態；回傳是否成功
   function save(state) {
     var store = backend();
     var serialized = JSON.stringify(state);
@@ -117,20 +182,16 @@
       try { store.setItem(STORAGE_KEY, serialized); return true; }
       catch (e) { return false; }
     }
-    memory = JSON.parse(serialized); // Node 測試用記憶體後備
+    memory = JSON.parse(serialized);
     return true;
   }
 
-  // 清除儲存（回到種子資料）
   function clear() {
     var store = backend();
-    if (store) {
-      try { store.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
-    }
+    if (store) { try { store.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ } }
     memory = null;
   }
 
-  // 匯出成可攜帶的備份物件（不含 version 以外的多餘欄位）
   function exportJson(state) {
     return {
       exportedAt: new Date().toISOString(),
@@ -141,23 +202,25 @@
     };
   }
 
-  // 匯入備份：接受 {terms, courses, assessments} 或含此三欄的外層包裝
   function importJson(data) {
     var norm = normalize(data);
     if (!norm) return { ok: false, error: '備份格式無效：需包含 terms / courses / assessments 陣列。' };
-    return { ok: true, state: { version: SCHEMA_VERSION, terms: norm.terms, courses: norm.courses, assessments: norm.assessments } };
+    return { ok: true, state: norm };
   }
 
-  // 產生下一個可用 id（給新增評核用）
   function nextId(items) {
     var max = 0;
-    items.forEach(function (it) { if (typeof it.id === 'number' && it.id > max) max = it.id; });
+    (items || []).forEach(function (it) { if (typeof it.id === 'number' && it.id > max) max = it.id; });
     return max + 1;
   }
 
   return {
     STORAGE_KEY: STORAGE_KEY,
+    BACKUPS_KEY: BACKUPS_KEY,
+    MAX_BACKUPS: MAX_BACKUPS,
     SCHEMA_VERSION: SCHEMA_VERSION,
+    genUid: genUid,
+    ensureUids: ensureUids,
     load: load,
     save: save,
     clear: clear,
@@ -165,8 +228,9 @@
     importJson: importJson,
     nextId: nextId,
     template: template,
-    BACKUP_KEY: BACKUP_KEY,
     saveBackup: saveBackup,
-    loadBackup: loadBackup
+    listBackups: listBackups,
+    loadBackup: loadBackup,
+    clearBackups: clearBackups
   };
 });

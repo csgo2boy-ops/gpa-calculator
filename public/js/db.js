@@ -1,11 +1,10 @@
 /* =====================================================================
- * db.js — 雙模資料層（雲端 Supabase vs 訪客 localStorage）
+ * db.js — 雙模資料層（2.0 Batch 1.1）
  *
- * - 已登入（Auth.isLoggedIn()）：呼叫 Supabase 做雲端增刪查改。
- * - 未登入（訪客）：回退至 localStorage（GpaStorage）。
- *
- * 純函式 stateToRows / rowsToState 負責「前端狀態 ↔ 資料表列」的對映，
- * 可在 Node.js 測試環境直接驗證，無需真實 Supabase。
+ * - 雲端寫入改走 Supabase RPC「gpa_replace_snapshot」：在單一資料庫交易內
+ *   完成快照替換（必要時 migration 需先執行），並以 revision 做樂觀並發控制。
+ * - 合併以穩定 uid（非本地數字 id）判斷同一筆資料，合併後重新映射關聯。
+ * - 純函式 stateToRows / rowsToState / mergeStates 可在 Node 測試。
  * ===================================================================== */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(root);
@@ -17,23 +16,43 @@
   var Storage = (root && root.GpaStorage) || (typeof require === 'function' ? require('../storage.js') : null);
   var Seed = (root && root.GpaSeed) || (typeof require === 'function' ? require('../seed-data.js') : null);
 
-  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  var REV_PREFIX = 'gpa-tracker-rev:';
 
-  // ---------- 純函式：前端狀態 ↔ 資料表列 ----------
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function ensure(state) { return Storage.ensureUids(state); }
+
+  // ---------- revision（樂觀並發控制，per-user）----------
+  function getKnownRevision(userId) {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      var raw = localStorage.getItem(REV_PREFIX + userId);
+      if (raw == null) return null;
+      var n = parseInt(raw, 10);
+      return isFinite(n) ? n : null;
+    } catch (e) { return null; }
+  }
+  function setKnownRevision(userId, rev) {
+    try {
+      if (typeof localStorage !== 'undefined' && rev != null) localStorage.setItem(REV_PREFIX + userId, String(rev));
+    } catch (e) { /* ignore */ }
+  }
+
+  // ---------- 純函式：狀態 ↔ 資料列 ----------
   function stateToRows(state) {
-    var semesters = (state.terms || []).map(function (t) {
-      return { local_id: t.id, name: t.name, sort_order: t.sortOrder };
+    var s = ensure(state);
+    var semesters = (s.terms || []).map(function (t) {
+      return { local_id: t.id, uid: t.uid, name: t.name, sort_order: t.sortOrder };
     });
-    var courses = (state.courses || []).map(function (c) {
+    var courses = (s.courses || []).map(function (c) {
       return {
-        local_id: c.id, semester_local_id: c.termId, code: c.code, title: c.title,
+        local_id: c.id, uid: c.uid, semester_local_id: c.termId, code: c.code, title: c.title,
         credits: c.credits, gpa_inclusion: c.gpaInclusion, official_mark: c.officialMark,
         official_gp: c.officialGP, cross_semester_policy: c.crossSemesterPolicy, target_grade: c.targetGrade
       };
     });
-    var assessments = (state.assessments || []).map(function (a) {
+    var assessments = (s.assessments || []).map(function (a) {
       return {
-        local_id: a.id, course_local_id: a.courseId, name: a.name, assessment_group: a.assessmentGroup,
+        local_id: a.id, uid: a.uid, course_local_id: a.courseId, name: a.name, assessment_group: a.assessmentGroup,
         weight_percent: a.weightPercent, max_points: a.maxPoints, earned_points: a.earnedPoints
       };
     });
@@ -42,31 +61,34 @@
 
   function rowsToState(rows) {
     var terms = (rows.semesters || []).map(function (s) {
-      return { id: s.local_id, name: s.name, sortOrder: s.sort_order };
+      return { id: s.local_id, uid: s.uid, name: s.name, sortOrder: s.sort_order };
     });
+    var termById = {};
+    terms.forEach(function (t) { termById[t.id] = t; });
     var courses = (rows.courses || []).map(function (c) {
       return {
-        id: c.local_id, termId: c.semester_local_id, code: c.code, title: c.title, credits: c.credits,
-        gpaInclusion: c.gpa_inclusion, officialMark: c.official_mark, officialGP: c.official_gp,
+        id: c.local_id, uid: c.uid, termId: c.semester_local_id,
+        termUid: termById[c.semester_local_id] ? termById[c.semester_local_id].uid : null,
+        code: c.code, title: c.title, credits: c.credits, gpaInclusion: c.gpa_inclusion,
+        officialMark: c.official_mark, officialGP: c.official_gp,
         crossSemesterPolicy: c.cross_semester_policy, targetGrade: c.target_grade
       };
     });
+    var courseById = {};
+    courses.forEach(function (c) { courseById[c.id] = c; });
     var assessments = (rows.assessments || []).map(function (a) {
       return {
-        id: a.local_id, courseId: a.course_local_id, name: a.name, assessmentGroup: a.assessment_group,
-        weightPercent: a.weight_percent, maxPoints: a.max_points, earnedPoints: a.earned_points
+        id: a.local_id, uid: a.uid, courseId: a.course_local_id,
+        courseUid: courseById[a.course_local_id] ? courseById[a.course_local_id].uid : null,
+        name: a.name, assessmentGroup: a.assessment_group, weightPercent: a.weight_percent,
+        maxPoints: a.max_points, earnedPoints: a.earned_points
       };
     });
-    return { version: 1, terms: terms, courses: courses, assessments: assessments };
+    return ensure({ version: 1, terms: terms, courses: courses, assessments: assessments });
   }
 
   function seedState() {
-    return {
-      version: 1,
-      terms: clone(Seed.terms),
-      courses: clone(Seed.courses),
-      assessments: clone(Seed.assessments)
-    };
+    return ensure({ version: 1, terms: clone(Seed.terms), courses: clone(Seed.courses), assessments: clone(Seed.assessments) });
   }
 
   // ---------- 訪客（localStorage）----------
@@ -78,98 +100,143 @@
       var raw = localStorage.getItem(Storage.STORAGE_KEY);
       if (!raw) return false;
       var parsed = JSON.parse(raw);
-      return parsed && Array.isArray(parsed.courses) && parsed.courses.length > 0;
+      if (!parsed) return false;
+      return (Array.isArray(parsed.courses) && parsed.courses.length > 0) ||
+             (Array.isArray(parsed.terms) && parsed.terms.length > 0);
     } catch (e) { return false; }
   }
 
   // ---------- 雲端 ----------
   function isCloud() { return !!(Auth && Auth.isAvailable() && Auth.isLoggedIn()); }
 
-  async function loadCloud() {
-    var client = Auth.getClient();
-    var userId = Auth.getUser().id;
+  async function loadCloud(deps) {
+    var client = (deps && deps.client) || Auth.getClient();
+    var userId = (deps && deps.userId) || (Auth.getUser() && Auth.getUser().id);
     var res = await Promise.all([
       client.from('semesters').select('*').eq('user_id', userId),
       client.from('courses').select('*').eq('user_id', userId),
       client.from('assessments').select('*').eq('user_id', userId)
     ]);
     var sem = res[0], cou = res[1], ass = res[2];
-    if (sem.error || cou.error || ass.error) {
-      throw new Error(((sem.error || cou.error || ass.error).message));
+    if ((sem && sem.error) || (cou && cou.error) || (ass && ass.error)) {
+      throw new Error(((sem && sem.error) || (cou && cou.error) || (ass && ass.error)).message || 'load failed');
     }
-    var s = sem.data || [], c = cou.data || [], a = ass.data || [];
-    if (s.length === 0 && c.length === 0 && a.length === 0) {
-      // 首次登入：雲端尚無資料，先以課程結構種子作為起始（待首次變更時才寫入雲端）
-      return seedState();
-    }
+    // 讀取目前 revision（若 migration 尚未執行則忽略）
+    try {
+      var revRes = await client.from('gpa_user_state').select('revision').eq('user_id', userId);
+      if (revRes && !revRes.error && revRes.data && revRes.data.length) setKnownRevision(userId, revRes.data[0].revision);
+    } catch (e) { /* optional */ }
+
+    var s = (sem && sem.data) || [], c = (cou && cou.data) || [], a = (ass && ass.data) || [];
+    if (s.length === 0 && c.length === 0 && a.length === 0) return seedState();
     return rowsToState({ semesters: s, courses: c, assessments: a });
   }
 
-  function withUser(rows, userId) {
-    return rows.map(function (r) { return Object.assign({ user_id: userId }, r); });
-  }
-
-  async function upsertTable(client, table, rows, userId) {
-    if (!rows.length) return;
-    var res = await client.from(table).upsert(withUser(rows, userId), { onConflict: 'user_id,local_id' });
-    if (res && res.error) throw res.error;
-  }
-
-  async function deleteMissing(client, userId, table, keepIds) {
-    var q = client.from(table).delete().eq('user_id', userId);
-    if (keepIds.length) q = q.not('local_id', 'in', '(' + keepIds.join(',') + ')');
-    var res = await q;
-    if (res && res.error) throw res.error;
-  }
-
-  // 寫回雲端：先 upsert（新增/更新），最後才刪除多餘列。
-  // 任何一步失敗 → throw，呼叫端顯示「同步失敗」，且雲端舊資料仍在（不會先刪光）。
-  // 寫入前先在本機留一份備份，供失敗時回復。
+  // ---------- 原子快照寫入（RPC）----------
+  // 依賴 migration：public.gpa_replace_snapshot(...)，在單一交易內完成「刪除+插入」。
   async function persistCloud(state, deps) {
     var client = (deps && deps.client) || Auth.getClient();
     var userId = (deps && deps.userId) || (Auth.getUser() && Auth.getUser().id);
     var rows = stateToRows(state);
+    var expected = (deps && Object.prototype.hasOwnProperty.call(deps, 'expectedRevision'))
+      ? deps.expectedRevision
+      : getKnownRevision(userId);
 
-    try { Storage.saveBackup(state); } catch (e) { /* 備份失敗不阻擋主流程 */ }
+    var backup = { ok: false, error: 'not attempted' };
+    try { backup = Storage.saveBackup(state, 'before-cloud-persist'); } catch (e) { backup = { ok: false, error: String(e) }; }
 
-    await upsertTable(client, 'semesters', rows.semesters, userId);
-    await upsertTable(client, 'courses', rows.courses, userId);
-    await upsertTable(client, 'assessments', rows.assessments, userId);
-
-    await deleteMissing(client, userId, 'assessments', rows.assessments.map(function (r) { return r.local_id; }));
-    await deleteMissing(client, userId, 'courses', rows.courses.map(function (r) { return r.local_id; }));
-    await deleteMissing(client, userId, 'semesters', rows.semesters.map(function (r) { return r.local_id; }));
+    var res = await client.rpc('gpa_replace_snapshot', {
+      p_semesters: rows.semesters,
+      p_courses: rows.courses,
+      p_assessments: rows.assessments,
+      p_expected_revision: (expected == null ? null : expected)
+    });
+    if (res && res.error) {
+      var msg = res.error.message || 'rpc failed';
+      var err = new Error(msg);
+      if (/function .*gpa_replace_snapshot.* does not exist/i.test(msg) || /schema cache/i.test(msg)) {
+        err.code = 'MIGRATION_REQUIRED';
+      }
+      throw err;
+    }
+    var data = (res && res.data) || {};
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+    if (data && data.conflict) {
+      var ce = new Error('revision conflict');
+      ce.code = 'REVISION_CONFLICT';
+      ce.currentRevision = data.current_revision;
+      throw ce;
+    }
+    if (data && data.revision != null) setKnownRevision(userId, data.revision);
+    return { revision: data && data.revision, backup: backup };
   }
 
-  // 安全合併：以 id 為鍵取聯集，避免重複與 ID 衝突；同一 id 以雲端版本為優先（不覆蓋雲端既有資料）。
+  // ---------- 安全合併（以 uid 為身份，重映射關聯，丟棄孤兒）----------
   function mergeStates(cloudState, localState) {
-    function mergeArr(cloudArr, localArr) {
-      var byId = {}, order = [];
-      (cloudArr || []).forEach(function (x) { if (!byId[x.id]) { byId[x.id] = x; order.push(x.id); } });
-      (localArr || []).forEach(function (x) { if (!byId[x.id]) { byId[x.id] = x; order.push(x.id); } });
-      return order.map(function (id) { return byId[id]; });
+    var c = ensure(cloudState);
+    var l = ensure(localState);
+
+    function union(a, b) {
+      var map = {}, order = [];
+      (a || []).forEach(function (x) { if (x.uid && !map[x.uid]) { map[x.uid] = x; order.push(x.uid); } });
+      (b || []).forEach(function (x) { if (x.uid && !map[x.uid]) { map[x.uid] = x; order.push(x.uid); } });
+      return order.map(function (uid) { return map[uid]; });
     }
+
+    var terms = union(c.terms, l.terms);
+    var courses = union(c.courses, l.courses);
+    var assessments = union(c.assessments, l.assessments);
+
+    var termByUid = {};
+    terms.forEach(function (t) { termByUid[t.uid] = t; });
+
+    // 丟棄孤兒科目（父學期不存在）
+    var keptCourses = [], droppedCourses = 0;
+    courses.forEach(function (x) {
+      if (x.termUid && termByUid[x.termUid]) keptCourses.push(x);
+      else droppedCourses++;
+    });
+    var courseByUid = {};
+    keptCourses.forEach(function (x) { courseByUid[x.uid] = x; });
+
+    // 丟棄孤兒評核（父科目不存在）
+    var keptAssessments = [], droppedAssessments = 0;
+    assessments.forEach(function (x) {
+      if (x.courseUid && courseByUid[x.courseUid]) keptAssessments.push(x);
+      else droppedAssessments++;
+    });
+
+    // 重新分配整數 id 並映射關聯
+    terms.forEach(function (t, i) { t.id = i + 1; });
+    keptCourses.forEach(function (x, i) { x.id = i + 1; x.termId = termByUid[x.termUid].id; });
+    var keptCourseByUid = {};
+    keptCourses.forEach(function (x) { keptCourseByUid[x.uid] = x; });
+    keptAssessments.forEach(function (x, i) { x.id = i + 1; x.courseId = keptCourseByUid[x.courseUid].id; });
+
     return {
       version: 1,
-      terms: mergeArr(cloudState.terms, localState.terms),
-      courses: mergeArr(cloudState.courses, localState.courses),
-      assessments: mergeArr(cloudState.assessments, localState.assessments)
+      terms: terms,
+      courses: keptCourses,
+      assessments: keptAssessments,
+      orphans: { courses: droppedCourses, assessments: droppedAssessments }
     };
   }
 
   // ---------- 統一介面 ----------
-  async function loadState() {
-    if (isCloud()) return await loadCloud();
+  async function loadState(deps) {
+    if (isCloud()) return await loadCloud(deps);
     return readLocalState();
   }
 
-  async function persist(state) {
-    if (isCloud()) return await persistCloud(state);
-    Storage.save(state);
+  async function persist(state, deps) {
+    if (isCloud()) return await persistCloud(state, deps);
+    var ok = Storage.save(state);
+    if (ok !== true) throw new Error('本機儲存失敗（可能是瀏覽器儲存空間不足）');
+    return { ok: true };
   }
 
-  async function syncLocalToCloud(localState) {
-    return await persistCloud(localState);
+  async function syncLocalToCloud(localState, deps) {
+    return await persistCloud(localState, deps);
   }
 
   return {
@@ -183,6 +250,9 @@
     rowsToState: rowsToState,
     seedState: seedState,
     mergeStates: mergeStates,
-    _persistCloud: persistCloud
+    getKnownRevision: getKnownRevision,
+    setKnownRevision: setKnownRevision,
+    _persistCloud: persistCloud,
+    _loadCloud: loadCloud
   };
 });

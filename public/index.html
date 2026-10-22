@@ -290,6 +290,21 @@
     </div>
   </div>
 
+  <!-- 備份歷史 Modal（多版本、含時間戳）-->
+  <div id="backup-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="window.__gpa && window.__gpa.closeBackupModal && window.__gpa.closeBackupModal()"></div>
+    <div class="modal-card modal-wide">
+      <div class="modal-head">
+        <h3 class="modal-title">還原備份</h3>
+        <button class="icon-btn" onclick="window.__gpa && window.__gpa.closeBackupModal && window.__gpa.closeBackupModal()" title="關閉">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="sync-desc">系統會自動保留最近 5 份備份（雲端寫入前、清空、匯入、載入範本、還原前）。選擇要還原的版本：</p>
+        <div id="backup-list"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="config.js"></script>

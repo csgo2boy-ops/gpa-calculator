@@ -70,6 +70,35 @@
     else if (status === 'error') { el.className = 'badge badge-danger'; el.textContent = '⚠ 同步失敗'; }
     else if (status === 'syncing') { el.className = 'badge badge-pending'; el.textContent = '⏳ 同步中…'; }
   }
+  function backupOrWarn(reason) {
+    var r = Storage.saveBackup(state, reason);
+    if (!r || !r.ok) {
+      toast('備份未建立：' + ((r && r.error) || '儲存空間不足'), 'error');
+      return false;
+    }
+    return true;
+  }
+
+  async function handleSyncError(e) {
+    if (!e) return;
+    if (e.code === 'REVISION_CONFLICT') {
+      var reload = confirm('雲端資料已被其他裝置更新（版本衝突）。\n\n按「確定」= 重新載入雲端最新資料；\n按「取消」= 用本機資料覆蓋雲端。');
+      if (reload) {
+        try { state = await Db.loadState(); render(); setSyncStatus('ok'); toast('已重新載入雲端最新資料。', 'success'); }
+        catch (e2) { toast('重新載入失敗：' + (e2.message || e2), 'error'); }
+      } else {
+        try { await Db.persist(state, { expectedRevision: e.currentRevision }); setSyncStatus('ok'); toast('已用本機資料覆蓋雲端。', 'success'); }
+        catch (e2) { toast('覆蓋失敗：' + (e2.message || e2), 'error'); }
+      }
+      return;
+    }
+    if (e.code === 'MIGRATION_REQUIRED') {
+      toast('雲端尚未套用 Batch 1.1 migration，請先執行 supabase/migrations/001_batch1_1_data_safety.sql', 'error');
+      return;
+    }
+    toast('同步失敗：' + (e.message || e), 'error');
+  }
+
   async function persist() {
     if (Auth.isLoggedIn()) setSyncStatus('syncing');
     try {
@@ -78,6 +107,7 @@
     } catch (e) {
       console.error(e);
       if (Auth.isLoggedIn()) setSyncStatus('error');
+      await handleSyncError(e);
     }
   }
   async function commit() { await persist(); render(); }
@@ -313,7 +343,7 @@
     var name = document.getElementById('term-name').value.trim();
     if (!name) { toast('請輸入學期名稱。'); return; }
     var maxOrder = state.terms.reduce(function (m, t) { return Math.max(m, t.sortOrder || 0); }, 0);
-    state.terms.push({ id: Storage.nextId(state.terms), name: name, sortOrder: maxOrder + 1 });
+    state.terms.push({ id: Storage.nextId(state.terms), uid: Storage.genUid(), name: name, sortOrder: maxOrder + 1 });
     closeTermModal();
     await commit();
   });
@@ -341,9 +371,12 @@
     var include = document.getElementById('course-include').checked;
     if (!title) { toast('請輸入科目名稱。'); return; }
     if (isNaN(credits) || credits < 0) { toast('學分必須是非負數。'); return; }
+    var parentTerm = state.terms.find(function (t) { return t.id === termId; });
     state.courses.push({
       id: Storage.nextId(state.courses),
+      uid: Storage.genUid(),
       termId: termId,
+      termUid: parentTerm ? parentTerm.uid : null,
       code: code || null,
       title: title,
       credits: credits,
@@ -400,6 +433,7 @@
     var maxPoints = maxStr === '' ? null : parseFloat(maxStr);
     var earnedStr = document.getElementById('form-earned').value;
     var earnedPoints = earnedStr === '' ? null : parseFloat(earnedStr);
+    if (maxPoints !== null && maxPoints <= 0) { toast('滿分必須大於 0。'); return; }
     if (earnedPoints !== null && earnedPoints < 0) { toast('得分不可小於 0。'); return; }
     if (earnedPoints !== null && maxPoints !== null && earnedPoints > maxPoints) { toast('得分不可大於滿分，請檢查後再儲存。'); return; }
 
@@ -413,9 +447,13 @@
         existing.earnedPoints = earnedPoints;
       }
     } else {
+      var parentCourse = state.courses.find(function (c) { return c.id === courseId; });
       state.assessments.push({
         id: Storage.nextId(state.assessments),
-        courseId: courseId, name: name.trim(), assessmentGroup: assessmentGroup,
+        uid: Storage.genUid(),
+        courseId: courseId,
+        courseUid: parentCourse ? parentCourse.uid : null,
+        name: name.trim(), assessmentGroup: assessmentGroup,
         weightPercent: weightPercent, maxPoints: maxPoints, earnedPoints: earnedPoints
       });
     }
@@ -477,8 +515,8 @@
     if (state.terms.length > 0) {
       if (!confirm('目前已有資料，載入範本會覆蓋目前內容，確定嗎？')) return;
     }
-    Storage.saveBackup(state);
-    state = { version: 1, terms: tpl.terms, courses: tpl.courses, assessments: tpl.assessments };
+    if (!backupOrWarn('before-template')) return;
+    state = Storage.ensureUids({ version: 1, terms: tpl.terms, courses: tpl.courses, assessments: tpl.assessments });
     await commit();
     toast('已載入 IT114105 範本（可按「還原備份」回復）。', 'success');
   }
@@ -508,25 +546,53 @@
       catch (err) { toast('無法解析 JSON 檔案，請確認是正確的備份檔。'); fileInput.value = ''; return; }
       var result = Storage.importJson(data);
       if (!result.ok) { toast(result.error); }
-      else { Storage.saveBackup(state); state = result.state; await commit(); toast('匯入成功：' + state.terms.length + ' 學期、' + state.courses.length + ' 科目、' + state.assessments.length + ' 評核。', 'success'); }
+      else {
+        if (!backupOrWarn('before-import')) { fileInput.value = ''; return; }
+        state = result.state;
+        await commit();
+        toast('匯入成功：' + state.terms.length + ' 學期、' + state.courses.length + ' 科目、' + state.assessments.length + ' 評核。', 'success');
+      }
       fileInput.value = '';
     };
     reader.readAsText(file, 'utf-8');
   }
   async function resetData() {
     if (!confirm('確定要清空目前所有資料嗎？（學期、科目、評核都會被刪除）\n清空前會自動建立一份可還原的備份。')) return;
-    Storage.saveBackup(state);
+    if (!backupOrWarn('before-clear')) return;
     state = { version: 1, terms: [], courses: [], assessments: [] };
     await commit();
     toast('已清空。如需回復，請按「還原備份」。', 'success');
   }
 
-  async function restoreBackup() {
-    var b = Storage.loadBackup();
+  function openBackupModal() {
+    var list = Storage.listBackups();
+    var body = document.getElementById('backup-list');
+    if (!body) return;
+    if (!list.length) {
+      body.innerHTML = '<p class="sync-desc">目前沒有任何備份。</p>';
+    } else {
+      body.innerHTML = list.map(function (b) {
+        return '<div class="backup-item">' +
+          '<div class="backup-meta"><strong>' + escapeHtml(b.savedAt) + '</strong>' +
+          '<span>' + escapeHtml(b.reason || '') + ' · ' + b.terms + ' 學期 / ' + b.courses + ' 科目 / ' + b.assessments + ' 評核</span></div>' +
+          '<button class="btn btn-ghost btn-sm" data-restore="' + b.index + '">還原</button>' +
+        '</div>';
+      }).join('');
+    }
+    document.getElementById('backup-modal').classList.remove('hidden');
+    document.getElementById('backup-modal').classList.add('flex');
+  }
+  function closeBackupModal() {
+    document.getElementById('backup-modal').classList.add('hidden');
+    document.getElementById('backup-modal').classList.remove('flex');
+  }
+  async function restoreBackupAt(index) {
+    var b = Storage.loadBackup(index);
     if (!b || !b.state) { toast('沒有可還原的備份。'); return; }
-    if (!confirm('確定要還原到 ' + (b.savedAt || '上次備份') + ' 的資料嗎？目前內容會被覆蓋（還原前會再備份一次）。')) return;
-    Storage.saveBackup(state);
-    state = b.state;
+    if (!confirm('確定還原到 ' + b.savedAt + ' 的備份嗎？目前內容會被覆蓋（還原前會再備份一次）。')) return;
+    if (!backupOrWarn('before-restore')) return;
+    state = Storage.ensureUids(b.state);
+    closeBackupModal();
     await commit();
     toast('已還原備份。', 'success');
   }
@@ -599,6 +665,8 @@
 
   // ---------- 事件委派 ----------
   document.addEventListener('click', function (e) {
+    var restoreBtn = e.target.closest('[data-restore]');
+    if (restoreBtn) { restoreBackupAt(parseInt(restoreBtn.getAttribute('data-restore'), 10)); return; }
     var btn = e.target.closest('[data-action]');
     if (!btn) return;
     var action = btn.dataset.action;
@@ -614,7 +682,7 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' || e.keyCode === 27) {
-      closeAuthModal(); closeTermModal(); closeCourseModal(); closeModal(); closeHelpModal();
+      closeAuthModal(); closeTermModal(); closeCourseModal(); closeModal(); closeHelpModal(); closeBackupModal();
     }
   });
 
@@ -623,7 +691,7 @@
   document.getElementById('btn-import').addEventListener('click', function () { document.getElementById('import-file').click(); });
   document.getElementById('import-file').addEventListener('change', importBackup);
   document.getElementById('btn-reset').addEventListener('click', resetData);
-  document.getElementById('btn-restore').addEventListener('click', restoreBackup);
+  document.getElementById('btn-restore').addEventListener('click', openBackupModal);
 
   // 暴露給 inline onclick
   window.__gpa = {
@@ -639,7 +707,8 @@
     closeCourseModal: closeCourseModal,
     loadTemplate: loadTemplate,
     openHelpModal: openHelpModal,
-    closeHelpModal: closeHelpModal
+    closeHelpModal: closeHelpModal,
+    closeBackupModal: closeBackupModal
   };
 
   // ---------- 同步衝突處理（保留雲端 / 保留本機 / 安全合併）----------
@@ -679,7 +748,12 @@
           if (choice === 'local') {
             await Db.syncLocalToCloud(Db.readLocalState());
           } else if (choice === 'merge') {
-            await Db.persist(Db.mergeStates(cloudState, Db.readLocalState()));
+            var merged = Db.mergeStates(cloudState, Db.readLocalState());
+            await Db.persist(merged);
+            var orph = merged.orphans || { courses: 0, assessments: 0 };
+            if (orph.courses || orph.assessments) {
+              toast('合併完成；已移除 ' + orph.courses + ' 個孤立科目、' + orph.assessments + ' 個孤立評核（其父項已被刪除）。', 'info');
+            }
           }
           // choice === 'cloud' → 保留雲端，不動作
         } else if (localHas && !cloudHas) {
