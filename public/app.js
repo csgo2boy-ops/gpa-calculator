@@ -50,7 +50,7 @@
   }
 
   function currentScroll() { try { return (typeof window !== 'undefined' && window.scrollY) || 0; } catch (e) { return 0; } }
-  function restoreScroll(y) { try { if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, y); } catch (e) {} }
+  function restoreScroll(y) { try { if (y > 0 && typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, y); } catch (e) {} }
   function focusAfter(id) {
     setTimeout(function () {
       try { var el = document.getElementById(id); if (el) { el.focus(); if (el.select) el.select(); } } catch (e) {}
@@ -114,11 +114,17 @@
     return '<div class="empty-state">' +
       '<div class="empty-icon">📘</div>' +
       '<h3 class="empty-title">歡迎使用 GPA Tracker</h3>' +
-      '<p class="empty-desc">你可以從零開始建立自己的課程，或一鍵載入 IT114105 的預設課程作為起點。</p>' +
+      '<p class="empty-desc">免費、免安裝的 GPA 成績追蹤工具，適用於任何學校與課程。你可以從零開始建立自己的課程，或載入 IT114105 範本作為起點。</p>' +
+      '<div class="empty-steps">' +
+        '<div class="step"><span class="step-num">1</span><span>新增學期</span></div>' +
+        '<div class="step"><span class="step-num">2</span><span>新增科目</span></div>' +
+        '<div class="step"><span class="step-num">3</span><span>新增評核</span></div>' +
+      '</div>' +
       '<div class="empty-actions">' +
         '<button class="btn btn-primary" onclick="window.__gpa.openTermModal()">＋ 從零開始</button>' +
         '<button class="btn btn-ghost" onclick="window.__gpa.loadTemplate()">📋 使用 IT114105 預設課程</button>' +
       '</div>' +
+      '<button class="link-btn" onclick="window.__gpa.openHelpModal()">📖 查看完整使用說明與算分規則</button>' +
     '</div>';
   }
 
@@ -527,6 +533,14 @@
     document.getElementById('auth-modal').classList.add('hidden');
     document.getElementById('auth-modal').classList.remove('flex');
   }
+  function openHelpModal() {
+    document.getElementById('help-modal').classList.remove('hidden');
+    document.getElementById('help-modal').classList.add('flex');
+  }
+  function closeHelpModal() {
+    document.getElementById('help-modal').classList.add('hidden');
+    document.getElementById('help-modal').classList.remove('flex');
+  }
   function setAuthTab() {
     document.getElementById('auth-modal-title').textContent = authTab === 'login' ? '登入' : '註冊';
     document.getElementById('auth-submit').textContent = authTab === 'login' ? '登入' : '註冊';
@@ -586,10 +600,11 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' || e.keyCode === 27) {
-      closeAuthModal(); closeTermModal(); closeCourseModal(); closeModal();
+      closeAuthModal(); closeTermModal(); closeCourseModal(); closeModal(); closeHelpModal();
     }
   });
 
+  document.getElementById('btn-help').addEventListener('click', openHelpModal);
   document.getElementById('btn-export').addEventListener('click', exportBackup);
   document.getElementById('btn-import').addEventListener('click', function () { document.getElementById('import-file').click(); });
   document.getElementById('import-file').addEventListener('change', importBackup);
@@ -607,7 +622,9 @@
     closeTermModal: closeTermModal,
     openCourseModal: openCourseModal,
     closeCourseModal: closeCourseModal,
-    loadTemplate: loadTemplate
+    loadTemplate: loadTemplate,
+    openHelpModal: openHelpModal,
+    closeHelpModal: closeHelpModal
   };
 
   // ---------- 認證狀態監聽 ----------
@@ -628,12 +645,21 @@
   });
 
   // ---------- 啟動 ----------
+  function maybeShowHelpOnFirstVisit() {
+    try {
+      if (localStorage.getItem('gpa-tracker-help-seen')) return;
+      openHelpModal();
+      localStorage.setItem('gpa-tracker-help-seen', '1');
+    } catch (e) {}
+  }
+
   async function bootstrap() {
     await Auth.ready;
     try { state = await Db.loadState(); }
     catch (e) { console.error(e); state = { version: 1, terms: [], courses: [], assessments: [] }; }
     renderNavbar();
     render();
+    maybeShowHelpOnFirstVisit();
   }
   bootstrap();
 })();
