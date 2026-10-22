@@ -1,0 +1,8 @@
+# Cloudflare Worker 部署設定
+# 讓 Git 自動部署（Workers Builds）知道要把 public/ 當靜態網站部署。
+name = "gpa-calculator"
+compatibility_date = "2024-09-23"
+
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
