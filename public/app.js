@@ -843,10 +843,10 @@
 
         // 舊資料遷移：以相同 local_id 對帳雲端 uid，避免第一次合併產生重複
         if (cloudHas && lm.uidsBackfilled) {
-          var rec = Db.reconcileLocalUids(localState, cloudState);
+          var rec = Db.reconcileLocalUids(localState, cloudState, { untrusted: true });
           if (rec.ambiguous && rec.ambiguous.length > 0) {
             var decisions = await askReconcile(rec.ambiguous);
-            rec = Db.reconcileLocalUids(localState, cloudState, decisions);
+            rec = Db.reconcileLocalUids(localState, cloudState, { untrusted: true, decisions: decisions });
           }
           localState = rec.state;
           try { Storage.save(localState); } catch (e4) { /* ignore */ }

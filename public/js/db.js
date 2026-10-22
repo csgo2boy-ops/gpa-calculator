@@ -264,27 +264,31 @@
   function sigCourse(c) { return normalizeText(c.code) + '|' + normalizeText(c.title) + '|' + String(c.credits); }
   function sigAssessment(a) { return normalizeText(a.name) + '|' + normalizeText(a.assessmentGroup) + '|' + String(a.weightPercent); }
 
-  function reconcileLocalUids(localState, cloudState, decisions) {
-    var dec = decisions || {};
+  function reconcileLocalUids(localState, cloudState, opts) {
+    opts = opts || {};
+    var untrusted = !!opts.untrusted;   // 本機 uid 是否為「剛補齊、未經使用者確認」
+    var dec = opts.decisions || {};
     var adopted = 0;
     var ambiguous = [];
 
-    function build(kind, arrLocal, arrCloud, sigFn) {
+    function build(kind, arrLocal, arrCloud, describe) {
       var cloudById = {};
       (arrCloud || []).forEach(function (c) { if (c && c.id != null) cloudById[c.id] = c; });
       return (arrLocal || []).map(function (l) {
         var c = cloudById[l.id];
-        if (!c || !isUuid(c.uid)) return Object.assign({}, l); // 雲端沒有 → 保留本機
+        if (!c || !isUuid(c.uid)) return Object.assign({}, l); // 雲端沒有此 id → 保留本機
+        if (l.uid === c.uid) return Object.assign({}, l);      // uid 相同 → 同一筆（可靠身份）
+        if (!untrusted) return Object.assign({}, l);           // 已信任但 uid 不同 → 不同筆
+        // 本機 uid 不可信：即使 local_id 與內容相同，也不可自動認定為同一筆
         var key = kind + ':' + l.id;
         var choice = dec[key];
         if (choice === 'cloud') { adopted++; return Object.assign({}, l, { uid: c.uid }); }
         if (choice === 'local') return Object.assign({}, l);
-        if (sigFn(l) === sigFn(c)) { adopted++; return Object.assign({}, l, { uid: c.uid }); }
         ambiguous.push({
           key: key, kind: kind, localId: l.id,
-          localLabel: sigFn(l), cloudLabel: sigFn(c)
+          localLabel: describe(l), cloudLabel: describe(c)
         });
-        return Object.assign({}, l); // 保守：不採用
+        return Object.assign({}, l); // 預設：不採用，交由使用者確認
       });
     }
 

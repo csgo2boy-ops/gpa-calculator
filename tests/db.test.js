@@ -82,7 +82,7 @@ test('mergeStates：孤兒被丟棄並回報', () => {
   assert.strictEqual(m.orphans.assessments, 1);
 });
 
-test('reconcileLocalUids：相同 local_id 且內容相同 → 採用雲端 uid，合併不重複', () => {
+test('reconcileLocalUids：untrusted + 相同 id + 相同內容 → 仍不自動採用（交人工確認）', () => {
   const cloud = stateWithUids();
   const local = {
     version: 1,
@@ -90,62 +90,85 @@ test('reconcileLocalUids：相同 local_id 且內容相同 → 採用雲端 uid�
     courses: [{ id: 1, uid: U.c2, termId: 1, termUid: U.t2, code: 'X', title: 'C1', credits: 3 }],
     assessments: []
   };
-  const rec = Db.reconcileLocalUids(local, cloud);
-  assert.strictEqual(rec.state.terms[0].uid, cloud.terms[0].uid);
-  assert.strictEqual(rec.state.courses[0].uid, cloud.courses[0].uid);
-  assert.strictEqual(rec.ambiguous.length, 0);
+  const rec = Db.reconcileLocalUids(local, cloud, { untrusted: true });
+  assert.strictEqual(rec.state.courses[0].uid, U.c2);      // 未自動採用
+  assert.ok(rec.ambiguous.length >= 1);
   const merged = Db.mergeStates(cloud, rec.state);
-  assert.strictEqual(merged.terms.length, 1);
-  assert.strictEqual(merged.courses.length, 1);
+  assert.strictEqual(merged.courses.length, 2);            // 未確認 → 保留兩筆
 });
 
-test('reconcileLocalUids：相同 local_id 但科目內容不同 → 不自動對帳（避免錯誤合併）', () => {
+test('reconcileLocalUids：untrusted + 人工確認同一筆 → 採用雲端 uid，合併 1 筆', () => {
   const cloud = stateWithUids();
   const local = {
     version: 1,
     terms: [{ id: 1, uid: U.t2, name: 'S1', sortOrder: 1 }],
-    courses: [{ id: 1, uid: U.c2, termId: 1, termUid: U.t2, title: '完全不同科目', credits: 3 }],
+    courses: [{ id: 1, uid: U.c2, termId: 1, termUid: U.t2, code: 'X', title: 'C1', credits: 3 }],
     assessments: []
   };
-  const rec = Db.reconcileLocalUids(local, cloud);
-  assert.strictEqual(rec.state.courses[0].uid, U.c2); // 保留本機 uid
-  assert.strictEqual(rec.ambiguous.length, 1);
-  assert.strictEqual(rec.ambiguous[0].kind, 'course');
+  const rec = Db.reconcileLocalUids(local, cloud, { untrusted: true, decisions: { 'term:1': 'cloud', 'course:1': 'cloud' } });
+  assert.strictEqual(rec.ambiguous.length, 0);
+  assert.strictEqual(rec.state.courses[0].uid, cloud.courses[0].uid);
   const merged = Db.mergeStates(cloud, rec.state);
-  assert.strictEqual(merged.courses.length, 2); // 兩門都保留，不被錯併
+  assert.strictEqual(merged.courses.length, 1);
 });
 
-test('reconcileLocalUids：相同 local_id 但 Assessment 內容不同 → 不自動對帳', () => {
+test('reconcileLocalUids：untrusted + 相同 id 但科目內容不同 → 不自動對帳', () => {
   const cloud = stateWithUids();
   const local = {
     version: 1,
     terms: [{ id: 1, uid: U.t1, name: 'S1', sortOrder: 1 }],
-    courses: [{ id: 1, uid: U.c1, termId: 1, termUid: U.t1, code: 'X', title: 'C1', credits: 3 }],
-    assessments: [{ id: 1, uid: U.a2, courseId: 1, courseUid: U.c1, name: '完全不同的評核', assessmentGroup: 'CA', weightPercent: 100 }]
+    courses: [{ id: 1, uid: U.c2, termId: 1, termUid: U.t1, title: '完全不同科目', credits: 3 }],
+    assessments: []
   };
-  const rec = Db.reconcileLocalUids(local, cloud);
+  const rec = Db.reconcileLocalUids(local, cloud, { untrusted: true });
+  assert.strictEqual(rec.state.courses[0].uid, U.c2);
   assert.strictEqual(rec.ambiguous.length, 1);
-  assert.strictEqual(rec.ambiguous[0].kind, 'assessment');
-  assert.strictEqual(rec.state.assessments[0].uid, U.a2);
+  assert.strictEqual(rec.ambiguous[0].kind, 'course');
+  const merged = Db.mergeStates(cloud, rec.state);
+  assert.strictEqual(merged.courses.length, 2);
 });
 
-test('reconcileLocalUids：可人工指定 decisions（cloud / local）', () => {
+test('reconcileLocalUids：相同名稱 + 相同權重但不同評核 → 不合併', () => {
+  const cloud = {
+    version: 1,
+    terms: [{ id: 1, uid: U.t1, name: 'S1', sortOrder: 1 }],
+    courses: [{ id: 1, uid: U.c1, termId: 1, termUid: U.t1, code: 'X', title: 'C1', credits: 3 }],
+    assessments: [{ id: 1, uid: U.a1, courseId: 1, courseUid: U.c1, name: 'Quiz', assessmentGroup: 'CA', weightPercent: 30, maxPoints: 100, earnedPoints: 50 }]
+  };
+  const local = {
+    version: 1,
+    terms: [{ id: 1, uid: U.t1, name: 'S1', sortOrder: 1 }],
+    courses: [{ id: 1, uid: U.c1, termId: 1, termUid: U.t1, code: 'X', title: 'C1', credits: 3 }],
+    assessments: [{ id: 1, uid: U.a2, courseId: 1, courseUid: U.c1, name: 'Quiz', assessmentGroup: 'CA', weightPercent: 30, maxPoints: 20, earnedPoints: 10 }]
+  };
+  const rec = Db.reconcileLocalUids(local, cloud, { untrusted: true });
+  assert.strictEqual(rec.ambiguous.length, 1);
+  assert.strictEqual(rec.ambiguous[0].kind, 'assessment');
+  const merged = Db.mergeStates(cloud, rec.state);
+  assert.strictEqual(merged.assessments.length, 2); // 不被錯併
+});
+
+test('reconcileLocalUids：uid 相同 → 視為同一筆（可靠身份）', () => {
+  const cloud = stateWithUids();
+  const local = stateWithUids();
+  const rec = Db.reconcileLocalUids(local, cloud, { untrusted: true });
+  assert.strictEqual(rec.ambiguous.length, 0);
+  assert.strictEqual(rec.state.terms[0].uid, cloud.terms[0].uid);
+});
+
+test('reconcileLocalUids：已信任 uid 但不同 → 不同筆（不列 ambiguous）', () => {
   const cloud = stateWithUids();
   const local = {
     version: 1,
     terms: [{ id: 1, uid: U.t2, name: 'S1', sortOrder: 1 }],
-    courses: [{ id: 1, uid: U.c2, termId: 1, termUid: U.t2, title: '不同科目', credits: 3 }],
+    courses: [{ id: 1, uid: U.c2, termId: 1, termUid: U.t2, code: 'X', title: 'C1', credits: 3 }],
     assessments: []
   };
-  const auto = Db.reconcileLocalUids(local, cloud);
-  assert.strictEqual(auto.ambiguous.length, 1);
-  // 人工確認：視為同一筆 → 採用雲端 uid
-  const forced = Db.reconcileLocalUids(local, cloud, { 'course:1': 'cloud' });
-  assert.strictEqual(forced.ambiguous.length, 0);
-  assert.strictEqual(forced.state.courses[0].uid, cloud.courses[0].uid);
-  // 人工確認：保留本機
-  const kept = Db.reconcileLocalUids(local, cloud, { 'course:1': 'local' });
-  assert.strictEqual(kept.state.courses[0].uid, U.c2);
+  const rec = Db.reconcileLocalUids(local, cloud, { untrusted: false });
+  assert.strictEqual(rec.ambiguous.length, 0);
+  assert.strictEqual(rec.state.courses[0].uid, U.c2);
+  const merged = Db.mergeStates(cloud, rec.state);
+  assert.strictEqual(merged.courses.length, 2);
 });
 
 test('reconcileLocalUids：不同 local_id 不互相對帳', () => {
@@ -156,7 +179,7 @@ test('reconcileLocalUids：不同 local_id 不互相對帳', () => {
     courses: [{ id: 9, uid: U.c2, termId: 9, termUid: U.t2, title: 'C1', credits: 3 }],
     assessments: []
   };
-  const rec = Db.reconcileLocalUids(local, cloud);
+  const rec = Db.reconcileLocalUids(local, cloud, { untrusted: true });
   assert.strictEqual(rec.state.courses[0].uid, U.c2);
   assert.strictEqual(rec.ambiguous.length, 0);
 });

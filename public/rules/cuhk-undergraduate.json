@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "institutionId": "cuhk",
+  "qualificationLevel": "bachelor",
+  "admissionYear": null,
+  "regulationVersion": "current",
+  "scope": "institution",
+  "scopeRef": null,
+  "profile": {
+    "gradeScale": {
+      "grades": [
+        {
+          "letter": "A",
+          "gp": 4
+        },
+        {
+          "letter": "A-",
+          "gp": 3.7
+        },
+        {
+          "letter": "B+",
+          "gp": 3.3
+        },
+        {
+          "letter": "B",
+          "gp": 3
+        },
+        {
+          "letter": "B-",
+          "gp": 2.7
+        },
+        {
+          "letter": "C+",
+          "gp": 2.3
+        },
+        {
+          "letter": "C",
+          "gp": 2
+        },
+        {
+          "letter": "C-",
+          "gp": 1.7
+        },
+        {
+          "letter": "D+",
+          "gp": 1.3
+        },
+        {
+          "letter": "D",
+          "gp": 1
+        },
+        {
+          "letter": "F",
+          "gp": 0
+        }
+      ],
+      "nonCountedDesignations": [
+        "DI",
+        "PA",
+        "FA",
+        "P",
+        "U",
+        "II",
+        "IP",
+        "NR",
+        "PP",
+        "FF",
+        "DN",
+        "CR",
+        "PS",
+        "FL"
+      ]
+    },
+    "gpaFormula": null,
+    "excludedCourses": null,
+    "repeatRule": null,
+    "scoreToGrade": null,
+    "attendancePolicy": null
+  },
+  "itemStatus": {
+    "gradeScale": "verified",
+    "gpaFormula": "unknown",
+    "excludedCourses": "partial",
+    "repeatRule": "unknown",
+    "scoreToGrade": "unknown",
+    "attendancePolicy": "unknown"
+  },
+  "itemSources": {
+    "gradeScale": [
+      {
+        "url": "https://www.res.cuhk.edu.hk/general-information/grading-system-of-undergraduate-programmes/",
+        "title": "Grading System of Undergraduate Programmes",
+        "accessedAt": "2026-10-22",
+        "excerpt": "A 4.0; A- 3.7; B+ 3.3; B 3.0; B- 2.7; C+ 2.3; C 2.0; C- 1.7; D+ 1.3; D 1.0; F 0.0. DI/PA/FA/P/U/II/IP/NR/PP/FF/DN/CR/PS/FL not counted in the calculation of grade point average."
+      }
+    ]
+  }
+}
