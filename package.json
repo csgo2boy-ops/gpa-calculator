@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "serve": "npx --yes serve public",
-    "test": "node tests/engine.test.js && node tests/storage.test.js"
+    "test": "node tests/engine.test.js && node tests/storage.test.js && node tests/db.test.js"
   },
   "keywords": [
     "gpa",

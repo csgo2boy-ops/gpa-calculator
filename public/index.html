@@ -3,12 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="GPA Tracker — 純前端、離線可用的香港 VTC/IVE GPA 成績追蹤與試算工具。">
+  <meta name="description" content="GPA Tracker — 純前端、可離線、支援雲端同步的香港 VTC/IVE GPA 成績追蹤與試算工具。">
   <title>GPA Tracker - 本機成績追蹤</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Modal 表單 -->
+  <!-- 頂部導覽列 -->
+  <nav class="navbar">
+    <div class="navbar-brand">🎓 GPA Tracker <span class="navbar-badge">IT114105</span></div>
+    <div id="account-area" class="navbar-account"></div>
+  </nav>
+
+  <!-- 認證 Modal（登入 / 註冊） -->
+  <div id="auth-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="window.__gpa && window.__gpa.closeAuthModal && window.__gpa.closeAuthModal()"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="auth-modal-title" class="modal-title">登入</h3>
+        <button class="icon-btn" onclick="window.__gpa && window.__gpa.closeAuthModal && window.__gpa.closeAuthModal()" title="關閉">✕</button>
+      </div>
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab active" data-tab="login">登入</button>
+        <button type="button" class="auth-tab" data-tab="register">註冊</button>
+      </div>
+      <form id="auth-form" class="modal-body">
+        <div class="field">
+          <label class="label">Email</label>
+          <input type="email" id="auth-email" required class="input" placeholder="你的 Email" autocomplete="email">
+        </div>
+        <div class="field">
+          <label class="label">密碼</label>
+          <input type="password" id="auth-password" required minlength="6" class="input" placeholder="至少 6 個字元" autocomplete="current-password">
+        </div>
+        <div id="auth-error" class="auth-error hidden"></div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" onclick="window.__gpa && window.__gpa.closeAuthModal && window.__gpa.closeAuthModal()">取消</button>
+          <button type="submit" class="btn btn-primary" id="auth-submit">登入</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 評核 Modal -->
   <div id="assessment-modal" class="modal hidden">
     <div class="modal-backdrop" onclick="window.__gpa && window.__gpa.closeModal && window.__gpa.closeModal()"></div>
     <div class="modal-card">
@@ -65,7 +101,6 @@
   <div class="container">
     <header class="header">
       <div class="header-title-wrap">
-        <h1 class="header-title">GPA Tracker <span class="header-badge">IT114105</span></h1>
         <p class="header-sub">資料來源：使用者提供之簡報與課程結構照片。未確認之校規將顯示為待確認。</p>
       </div>
       <div class="header-actions">
@@ -97,13 +132,17 @@
     </div>
 
     <footer class="footer">
-      資料僅儲存於本機瀏覽器（localStorage），不會上傳至任何伺服器。
+      訪客模式資料儲存於本機瀏覽器；登入後資料雲端同步，不會公開給其他使用者。
     </footer>
   </div>
 
-  <script src="seed-data.js"></script>
+  <script src="config.js"></script>
   <script src="engine.js"></script>
+  <script src="seed-data.js"></script>
   <script src="storage.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/db.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -380,3 +380,65 @@ body {
 /* ---------- Animation ---------- */
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .card { animation: fadeIn 0.4s ease-out forwards; }
+
+/* ---------- Navbar ---------- */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 2rem;
+  background: #fff;
+  border-bottom: 1px solid var(--border-200);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.navbar-brand { font-size: 1.125rem; font-weight: 700; color: var(--text-800); }
+.navbar-badge {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #6366f1;
+  background: var(--primary-50);
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.375rem;
+  margin-left: 0.25rem;
+}
+.navbar-account { display: flex; align-items: center; gap: 0.625rem; flex-wrap: wrap; }
+.nav-email {
+  font-size: 0.875rem;
+  color: var(--text-600);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; }
+
+/* ---------- Auth Modal ---------- */
+.auth-tabs { display: flex; border-bottom: 1px solid var(--border-100); }
+.auth-tab {
+  flex: 1;
+  padding: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-500);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  font-family: inherit;
+}
+.auth-tab:hover { color: var(--primary); }
+.auth-tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 700; }
+.auth-error {
+  font-size: 0.8125rem;
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+}
+.auth-error-info { color: var(--emerald-text); background: var(--emerald-bg); border-color: var(--emerald-border); }
+

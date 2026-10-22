@@ -1,23 +1,28 @@
 /* =========================================================================
  * app.js
  * 前端主程式：渲染、事件綁定、資料編輯與即時試算。
- * 完全在瀏覽器端運作，不發送任何網路請求。
- * 依賴：GpaSeed（種子資料）、GpaEngine（計算）、GpaStorage（持久化）。
+ * 完全在瀏覽器端運作；資料層透過 GpaDb 在「雲端（Supabase）」與
+ * 「訪客（localStorage）」之間自動切換。
+ * 依賴：GpaSeed、GpaEngine、GpaStorage、GpaAuth、GpaDb。
  * ========================================================================= */
 (function () {
   'use strict';
 
   var Engine = window.GpaEngine;
   var Storage = window.GpaStorage;
-  if (!Engine || !Storage) {
+  var Db = window.GpaDb;
+  var Auth = window.GpaAuth;
+
+  if (!Engine || !Storage || !Db || !Auth) {
     document.addEventListener('DOMContentLoaded', function () {
-      document.body.innerHTML = '<div style="padding:2rem;color:#991b1b;font-family:sans-serif">載入失敗：缺少必要的腳本（engine.js / storage.js）。</div>';
+      document.body.innerHTML = '<div style="padding:2rem;color:#991b1b;font-family:sans-serif">載入失敗：缺少必要的腳本。</div>';
     });
     return;
   }
 
   var GRADES = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D'];
-  var state = Storage.load();
+  var state = null;
+  var authTab = 'login';
 
   // ---------- 工具 ----------
   function escapeHtml(str) {
@@ -38,8 +43,45 @@
     return Engine.calculateCourse(assessmentsOf(course.id), course.targetGrade || 'A');
   }
 
-  function persist() {
-    Storage.save(state);
+  function setSyncStatus(status) {
+    var el = document.getElementById('sync-badge');
+    if (!el) return;
+    if (status === 'ok') { el.className = 'badge badge-emerald'; el.textContent = '☁ 雲端同步正常'; }
+    else if (status === 'error') { el.className = 'badge badge-danger'; el.textContent = '⚠ 同步失敗'; }
+  }
+
+  async function persist() {
+    try {
+      await Db.persist(state);
+      if (Auth.isLoggedIn()) setSyncStatus('ok');
+    } catch (e) {
+      console.error(e);
+      if (Auth.isLoggedIn()) setSyncStatus('error');
+    }
+  }
+
+  async function commit() {
+    await persist();
+    render();
+  }
+
+  // ---------- 導覽列（帳號區塊）----------
+  function renderNavbar() {
+    var area = document.getElementById('account-area');
+    if (!area) return;
+    if (Auth.isLoggedIn()) {
+      var u = Auth.getUser();
+      area.innerHTML =
+        '<span class="nav-email">' + escapeHtml(u && u.email) + '</span>' +
+        '<span id="sync-badge" class="badge badge-emerald">☁ 雲端同步正常</span>' +
+        '<button id="btn-logout" class="btn btn-ghost btn-sm">登出</button>';
+      document.getElementById('btn-logout').addEventListener('click', function () { Auth.signOut(); });
+    } else {
+      area.innerHTML =
+        '<span class="badge badge-slate">訪客模式（本地暫存）</span>' +
+        '<button id="btn-open-auth" class="btn btn-ghost btn-sm">登入 / 註冊</button>';
+      document.getElementById('btn-open-auth').addEventListener('click', function () { openAuthModal('login'); });
+    }
   }
 
   // ---------- 渲染 ----------
@@ -56,6 +98,7 @@
   }
 
   function render() {
+    if (!state) return;
     var termList = document.getElementById('term-list');
     var terms = state.terms.slice().sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
 
@@ -192,11 +235,11 @@
       .reduce(function (sum, c) { return sum + c.credits; }, 0);
 
     var cgpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '--';
-    document.getElementById('cgpa-display').innerText = cgpa;
-    document.getElementById('cgpa-coverage').innerText = '覆蓋學分: ' + totalCredits + ' / ' + totalIncludeCredits;
+    document.getElementById('cgpa-display').textContent = cgpa;
+    document.getElementById('cgpa-coverage').textContent = '覆蓋學分: ' + totalCredits + ' / ' + totalIncludeCredits;
   }
 
-  // ---------- Modal ----------
+  // ---------- 評核 Modal ----------
   var modal = document.getElementById('assessment-modal');
   var form = document.getElementById('assessment-form');
 
@@ -204,7 +247,7 @@
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     if (editData) {
-      document.getElementById('modal-title').innerText = '編輯評核項目';
+      document.getElementById('modal-title').textContent = '編輯評核項目';
       document.getElementById('form-id').value = editData.id;
       document.getElementById('form-courseId').value = courseId;
       document.getElementById('form-name').value = editData.name;
@@ -213,7 +256,7 @@
       document.getElementById('form-max').value = editData.maxPoints > 0 ? editData.maxPoints : '';
       document.getElementById('form-earned').value = editData.earnedPoints !== null ? editData.earnedPoints : '';
     } else {
-      document.getElementById('modal-title').innerText = '新增評核項目';
+      document.getElementById('modal-title').textContent = '新增評核項目';
       form.reset();
       document.getElementById('form-id').value = '';
       document.getElementById('form-courseId').value = courseId;
@@ -226,7 +269,7 @@
     modal.classList.remove('flex');
   }
 
-  form.addEventListener('submit', function (e) {
+  form.addEventListener('submit', async function (e) {
     e.preventDefault();
     var id = document.getElementById('form-id').value;
     var courseId = parseInt(document.getElementById('form-courseId').value, 10);
@@ -238,16 +281,12 @@
       alert('權重必須是 0 至 100 之間的數字。');
       return;
     }
-
     var maxStr = document.getElementById('form-max').value;
     var maxPoints = maxStr === '' ? null : parseFloat(maxStr);
     var earnedStr = document.getElementById('form-earned').value;
     var earnedPoints = earnedStr === '' ? null : parseFloat(earnedStr);
 
-    if (earnedPoints !== null && earnedPoints < 0) {
-      alert('得分不可小於 0。');
-      return;
-    }
+    if (earnedPoints !== null && earnedPoints < 0) { alert('得分不可小於 0。'); return; }
     if (earnedPoints !== null && maxPoints !== null && earnedPoints > maxPoints) {
       alert('得分不可大於滿分，請檢查後再儲存。');
       return;
@@ -273,46 +312,38 @@
         earnedPoints: earnedPoints
       });
     }
-    persist();
     closeModal();
-    render();
+    await commit();
   });
 
-  function deleteAssessment(id) {
+  async function deleteAssessment(id) {
     if (!confirm('確定要刪除這筆評核紀錄嗎？刪除後無法復原。')) return;
     state.assessments = state.assessments.filter(function (a) { return a.id !== id; });
-    persist();
-    render();
+    await commit();
   }
 
-  function updateTarget(courseId, targetGrade) {
+  async function updateTarget(courseId, targetGrade) {
     var c = state.courses.find(function (x) { return x.id === courseId; });
-    if (c) { c.targetGrade = targetGrade; persist(); render(); }
+    if (c) { c.targetGrade = targetGrade; await commit(); }
   }
 
-  function editCredits(courseId, currentCredits) {
+  async function editCredits(courseId, currentCredits) {
     var newCreditsStr = prompt('請輸入新的學分數 (可輸入小數):', currentCredits);
     if (newCreditsStr === null) return;
     var newCredits = parseFloat(newCreditsStr);
-    if (isNaN(newCredits) || newCredits < 0) {
-      alert('請輸入有效的非負數！');
-      return;
-    }
+    if (isNaN(newCredits) || newCredits < 0) { alert('請輸入有效的非負數！'); return; }
     var c = state.courses.find(function (x) { return x.id === courseId; });
-    if (c) { c.credits = newCredits; persist(); render(); }
+    if (c) { c.credits = newCredits; await commit(); }
   }
 
-  function confirmCourse(courseId) {
+  async function confirmCourse(courseId) {
     var course = state.courses.find(function (c) { return c.id === courseId; });
     if (!course) return;
     var markStr = prompt('請輸入校方公布的科目最終分數 (0-100)，留空可清除:', course.officialMark !== null && course.officialMark !== undefined ? course.officialMark : '');
     if (markStr === null) return;
     var trimmed = markStr.trim();
     var mark = trimmed === '' ? null : parseFloat(trimmed);
-    if (mark !== null && (isNaN(mark) || mark < 0 || mark > 100)) {
-      alert('請輸入 0 至 100 之間的有效數字。');
-      return;
-    }
+    if (mark !== null && (isNaN(mark) || mark < 0 || mark > 100)) { alert('請輸入 0 至 100 之間的有效數字。'); return; }
 
     var gpaInclusion = 'include';
     if (['SDD4005', 'SDD4006M', 'SDD4007', 'LAN3107', 'LAN3108'].indexOf(course.code) !== -1) {
@@ -322,8 +353,7 @@
     course.officialMark = mark;
     course.officialGP = mark === null ? null : Engine.getGrade(mark).gp;
     course.gpaInclusion = gpaInclusion;
-    persist();
-    render();
+    await commit();
   }
 
   // ---------- 匯出 / 匯入 / 重設 ----------
@@ -349,7 +379,7 @@
     }
     var file = fileInput.files[0];
     var reader = new FileReader();
-    reader.onload = function () {
+    reader.onload = async function () {
       var data;
       try { data = JSON.parse(reader.result); }
       catch (err) { alert('無法解析 JSON 檔案，請確認是正確的備份檔。'); fileInput.value = ''; return; }
@@ -358,8 +388,7 @@
         alert(result.error);
       } else {
         state = result.state;
-        persist();
-        render();
+        await commit();
         alert('匯入成功：' + state.terms.length + ' 學期、' + state.courses.length + ' 科目、' + state.assessments.length + ' 評核。');
       }
       fileInput.value = '';
@@ -367,12 +396,70 @@
     reader.readAsText(file, 'utf-8');
   }
 
-  function resetData() {
+  async function resetData() {
     if (!confirm('確定要清除目前所有資料，並還原為預設課程結構嗎？此動作無法復原。')) return;
-    Storage.clear();
-    state = Storage.load();
-    render();
+    state = Db.seedState();
+    await commit();
   }
+
+  // ---------- 認證 Modal ----------
+  function openAuthModal(tab) {
+    authTab = tab || 'login';
+    setAuthTab();
+    var errEl = document.getElementById('auth-error');
+    errEl.classList.add('hidden');
+    errEl.textContent = '';
+    document.getElementById('auth-form').reset();
+    document.getElementById('auth-modal').classList.remove('hidden');
+    document.getElementById('auth-modal').classList.add('flex');
+  }
+
+  function closeAuthModal() {
+    document.getElementById('auth-modal').classList.add('hidden');
+    document.getElementById('auth-modal').classList.remove('flex');
+  }
+
+  function setAuthTab() {
+    document.getElementById('auth-modal-title').textContent = authTab === 'login' ? '登入' : '註冊';
+    document.getElementById('auth-submit').textContent = authTab === 'login' ? '登入' : '註冊';
+    var tabs = document.querySelectorAll('.auth-tab');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('active', tabs[i].getAttribute('data-tab') === authTab);
+    }
+  }
+
+  function showAuthError(msg, isInfo) {
+    var el = document.getElementById('auth-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    el.classList.toggle('auth-error-info', !!isInfo);
+  }
+
+  document.querySelectorAll('.auth-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      authTab = tab.getAttribute('data-tab');
+      setAuthTab();
+      document.getElementById('auth-error').classList.add('hidden');
+    });
+  });
+
+  document.getElementById('auth-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var email = document.getElementById('auth-email').value.trim();
+    var password = document.getElementById('auth-password').value;
+    if (password.length < 6) { showAuthError('密碼長度不足，至少需要 6 個字元。'); return; }
+
+    var res;
+    if (authTab === 'login') res = await Auth.signIn(email, password);
+    else res = await Auth.signUp(email, password);
+
+    if (!res.ok) { showAuthError(res.error); return; }
+    if (res.needConfirm) {
+      showAuthError('註冊成功！請先到信箱點擊驗證連結，再回來登入。', true);
+      return;
+    }
+    closeAuthModal();
+  });
 
   // ---------- 事件委派 ----------
   document.addEventListener('click', function (e) {
@@ -394,15 +481,52 @@
   document.getElementById('import-file').addEventListener('change', importBackup);
   document.getElementById('btn-reset').addEventListener('click', resetData);
 
-  // 暴露給 inline onclick（渲染出的按鈕用）
+  // 暴露給 inline onclick
   window.__gpa = {
     editCredits: editCredits,
     updateTarget: updateTarget,
     openModal: openModal,
     closeModal: closeModal,
+    closeAuthModal: closeAuthModal,
     confirmCourse: confirmCourse
   };
 
+  // ---------- 認證狀態監聽 ----------
+  Auth.onAuthChange(async function (user, event) {
+    renderNavbar();
+    if (event === 'SIGNED_IN') {
+      try {
+        if (Db.hasLocalData()) {
+          var ok = confirm('偵測到本地暫存資料，是否將成績同步至您的雲端帳號？');
+          if (ok) {
+            await Db.syncLocalToCloud(Db.readLocalState());
+          }
+        }
+        state = await Db.loadState();
+        render();
+      } catch (e) {
+        console.error(e);
+      }
+    } else if (event === 'SIGNED_OUT') {
+      try {
+        state = await Db.loadState();
+        render();
+      } catch (e) { console.error(e); }
+    }
+  });
+
   // ---------- 啟動 ----------
-  render();
+  async function bootstrap() {
+    await Auth.ready;
+    try {
+      state = await Db.loadState();
+    } catch (e) {
+      console.error(e);
+      state = Db.seedState();
+    }
+    renderNavbar();
+    render();
+  }
+
+  bootstrap();
 })();
