@@ -17,7 +17,8 @@
           "letter": "A",
           "gp": 4,
           "minMark": 75,
-          "maxMark": 100.5
+          "maxMark": 100,
+          "maxInclusive": true
         },
         {
           "letter": "A-",
@@ -118,6 +119,11 @@
       "classTypes": {},
       "riskTiers": null,
       "futureTotalSessionsUnknown": null
+    },
+    "assessmentPolicy": {
+      "modulePassThreshold": 40,
+      "formPassThreshold": 40,
+      "requireEaPass": true
     }
   },
   "itemStatus": {
@@ -125,7 +131,8 @@
     "gpaRules": "unknown",
     "repeatRules": "partial",
     "scoreToGrade": "partial",
-    "attendancePolicy": "partial"
+    "attendancePolicy": "partial",
+    "assessmentPolicy": "partial"
   },
   "itemSources": {
     "gradeScale": [
@@ -150,6 +157,22 @@
         "title": "IVE BA114062 New Student Orientation 2023 - Attendance Requirement",
         "accessedAt": "2026-10-22",
         "excerpt": "Minimum attendance requirement for an individual module is 70%. Students not satisfying it shall not be allowed to undergo the End-of-Module Assessment nor be awarded a Module Mark/Grade."
+      }
+    ],
+    "assessmentPolicy": [
+      {
+        "url": "https://www.vtc.edu.hk/ive/hw/Temp/orientation/ba/114062.pdf",
+        "title": "BA114062 Orientation August 2023 - slide 17 Pass Requirement",
+        "accessedAt": "2026-10-23",
+        "excerpt": "Module minimum: 40% and D; each assessment form: 40%; End-of-Module Assessment must be passed."
+      }
+    ],
+    "scoreToGrade": [
+      {
+        "url": "https://www.vtc.edu.hk/ive/hw/Temp/orientation/ba/114062.pdf",
+        "title": "IVE BA114062 New Student Orientation 2023 - Grades table",
+        "accessedAt": "2026-10-22",
+        "excerpt": "A 4.0 (75<=X<=100); A- 3.7 (70<=X<75); ... D 1.0 (40<=X<46); F 0.0 (0<=X<40). No grade points for Pass/Fail modules."
       }
     ]
   },

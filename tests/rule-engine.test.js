@@ -14,6 +14,8 @@ const Storage = require('../public/storage.js');
 const cuhk2021 = require('../public/rules/cuhk-undergraduate-2021-22.json');
 const cuhk2026 = require('../public/rules/cuhk-undergraduate-2026-27.json');
 const vtc = require('../public/rules/vtc-higher-diploma-ba114062-2023.json');
+function cuhkRequest(){ return {...cuhk2021.identity, programmeId:'general',programmeCategory:'non-medical',campus:'hong-kong'}; }
+function eligible(c){return {...c,included:true,repeatStatus:'not-repeat'};}
 
 test('Schema：三個官方 profile 通過驗證', () => {
   assert.deepStrictEqual(Validate.validateProfile(cuhk2021).errors, []);
@@ -28,14 +30,14 @@ test('Schema：缺 identity / 非法 gp 被拒', () => {
   assert.strictEqual(Validate.validateProfile(bad).ok, false);
 });
 
-test('RuleResolver：三層覆寫（subject 優先）', () => {
+test('RuleResolver：subject 覆寫優先', () => {
   const subject = {
     schemaVersion: 1, identity: cuhk2021.identity, scope: 'subject',
     scopeRef: { subjectCode: 'ACCT1010' },
     profile: { gpaRules: { formula: 'unknown' } },
     itemStatus: { gpaRules: 'custom' }, itemSources: {}
   };
-  const r = Resolver.resolve(Object.assign({}, cuhk2021.identity, { subjectCode: 'ACCT1010' }), [cuhk2021, subject]);
+  const r = Resolver.resolve(Object.assign(cuhkRequest(), { subjectCode: 'ACCT1010' }), [cuhk2021, subject]);
   assert.strictEqual(r.layers.length, 2);
   assert.strictEqual(r.status.gpaRules, 'custom');
   assert.strictEqual(r.status.gradeScale, 'verified');
@@ -68,7 +70,7 @@ test('AssessmentEngine：VTC 40% 門檻 → EA 0% 未達標', () => {
 });
 
 test('GradingPolicyEngine：CUHK 只有 GP、無百分比分界 → 不得推導等級', () => {
-  const r = Resolver.resolve(cuhk2021.identity, [cuhk2021]);
+  const r = Resolver.resolve(cuhkRequest(), [cuhk2021]);
   const g = Grading.toGrade(95, r);
   assert.strictEqual(g.grade, null);
   assert.strictEqual(g.reason, 'no-mark-boundaries');
@@ -89,12 +91,12 @@ test('GradingPolicyEngine：未知 scale 不可換算', () => {
 });
 
 test('GpaAggregationEngine：CUHK 公式已核實 → 只計正式等級', () => {
-  const r = Resolver.resolve(cuhk2021.identity, [cuhk2021]);
+  const r = Resolver.resolve(cuhkRequest(), [cuhk2021]);
   const res = Gpa.computeGpa([
-    { id: 1, units: 3, officialGrade: 'A' },
-    { id: 2, units: 2, officialGrade: 'B' },
-    { id: 3, units: 1, officialGrade: 'P' },
-    { id: 4, units: 3, officialGrade: null }
+    eligible({ id: 1, units: 3, officialGrade: 'A' }),
+    eligible({ id: 2, units: 2, officialGrade: 'B' }),
+    eligible({ id: 3, units: 1, officialGrade: 'P' }),
+    eligible({ id: 4, units: 3, officialGrade: null })
   ], r);
   assert.strictEqual(res.value, 3.6);
   assert.ok(res.skippedCourses.some(c => c.reason === 'non-counted-grade'));
@@ -109,8 +111,8 @@ test('GpaAggregationEngine：公式 unknown → 不產生官方 GPA', () => {
 });
 
 test('ScenarioEngine：預測 GPA 標示 predicted', () => {
-  const r = Resolver.resolve(cuhk2021.identity, [cuhk2021]);
-  const res = Scenario.predictGpa([{ id: 1, units: 3, assumedGrade: 'A' }], r);
+  const r = Resolver.resolve(cuhkRequest(), [cuhk2021]);
+  const res = Scenario.predictGpa([eligible({ id: 1, units: 3, assumedGrade: 'A' })], r);
   assert.strictEqual(res.predicted, true);
   assert.strictEqual(res.value, 4.0);
 });
@@ -118,7 +120,7 @@ test('ScenarioEngine：預測 GPA 標示 predicted', () => {
 test('Attendance：session 模式、取消課堂不計、遲到權重', () => {
   const res = Attendance.compute([
     { status: 'present' }, { status: 'present' }, { status: 'late' }, { status: 'absent' }, { status: 'cancelled' }
-  ], { countingUnit: 'session', lateWeight: 0.5, attendanceThresholdPercent: 75 });
+  ], { countingUnit: 'session', cancelledExcluded:true, lateWeight: 0.5, attendanceThresholdPercent: 75 });
   assert.strictEqual(res.sessions, 4);
   assert.ok(Math.abs(res.rate - 62.5) < 1e-9);
   assert.strictEqual(res.meetsThreshold, false);
@@ -150,7 +152,7 @@ test('Attendance：早退 / 請假 / 缺席', () => {
 test('隔離：CUHK 與 VTC 不共用 Grade Scale', () => {
   assert.strictEqual(Validate.hasMarkBoundaries(cuhk2021.profile.gradeScale), false);
   assert.strictEqual(Validate.hasMarkBoundaries(vtc.profile.gradeScale), true);
-  const rC = Resolver.resolve(cuhk2021.identity, [cuhk2021]);
+  const rC = Resolver.resolve(cuhkRequest(), [cuhk2021]);
   const rV = Resolver.resolve(Object.assign({}, vtc.identity, { programmeId: 'BA114062' }), [vtc]);
   assert.strictEqual(Grading.toGrade(95, rC).grade, null);
   assert.strictEqual(Grading.toGrade(95, rV).grade, 'A');

@@ -90,11 +90,8 @@
     "gpaRules": {
       "formula": "weighted-points-over-attempted-units",
       "includeFailedCourses": true,
-      "includeExcludedCourses": false,
-      "rounding": {
-        "method": "half-up",
-        "dp": 2
-      }
+      "includeExcludedCourses": null,
+      "rounding": null
     },
     "repeatRules": {
       "repeatFailedRequired": true,
@@ -122,14 +119,28 @@
       "classTypes": {},
       "riskTiers": null,
       "futureTotalSessionsUnknown": null
+    },
+    "applicability": {
+      "excludedProgrammeIds": [
+        "medicine"
+      ],
+      "excludedCampuses": [
+        "shenzhen"
+      ],
+      "requiresProgrammeConfirmation": true
     }
   },
   "itemStatus": {
     "gradeScale": "verified",
-    "gpaRules": "verified",
+    "gpaRules": "partial",
     "repeatRules": "partial",
     "scoreToGrade": "unknown",
-    "attendancePolicy": "partial"
+    "attendancePolicy": "partial",
+    "gpaRules.formula": "verified",
+    "gpaRules.includeFailedCourses": "verified",
+    "gpaRules.includeExcludedCourses": "unknown",
+    "gpaRules.rounding": "unknown",
+    "applicability": "verified"
   },
   "itemSources": {
     "gradeScale": [
@@ -162,6 +173,30 @@
         "title": "CUHK General Regulations 2021-22 - Reg 8",
         "accessedAt": "2026-10-22",
         "excerpt": "Reg 8.1-8.5 cover absence, medical certificate, leave of absence; no numeric attendance threshold specified at University level."
+      }
+    ],
+    "gpaRules.formula": [
+      {
+        "url": "https://rgsntl.rgs.cuhk.edu.hk/aqs_prd_applx/public/handbook/view_document.aspx?id=1835&lang=en&seq=1",
+        "title": "CUHK General Regulations 2021-22 - Reg 9.2",
+        "accessedAt": "2026-10-22",
+        "excerpt": "GPA = total weighted converted points / total number of units attempted inclusive of courses failed; weighted converted points = converted points x units."
+      }
+    ],
+    "gpaRules.includeFailedCourses": [
+      {
+        "url": "https://rgsntl.rgs.cuhk.edu.hk/aqs_prd_applx/public/handbook/view_document.aspx?id=1835&lang=en&seq=1",
+        "title": "CUHK General Regulations 2021-22 - Reg 9.2",
+        "accessedAt": "2026-10-22",
+        "excerpt": "GPA = total weighted converted points / total number of units attempted inclusive of courses failed; weighted converted points = converted points x units."
+      }
+    ],
+    "applicability": [
+      {
+        "url": "https://rgsntl.rgs.cuhk.edu.hk/aqs_prd_applx/public/handbook/view_document.aspx?id=1835&lang=en&seq=1",
+        "title": "CUHK General Regulations - scope preamble",
+        "accessedAt": "2026-10-22",
+        "excerpt": "General regulations exclude Medical studies and programmes offered by CUHK Shenzhen."
       }
     ]
   }

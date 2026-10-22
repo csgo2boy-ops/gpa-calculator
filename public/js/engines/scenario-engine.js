@@ -1,30 +1,14 @@
-(function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(root);
-  else root.GpaScenarioEngine = factory(root);
-})(typeof self !== 'undefined' ? self : this, function (root) {
-  'use strict';
-
-  // 預測 GPA：使用使用者提供的假設等級，結果必須標示 predicted。
-  function predictGpa(courses, resolution) {
-    var Gpa = (typeof module === 'object' && module.exports)
-      ? require('./gpa-aggregation-engine.js')
-      : root.GpaAggregationEngine;
-    var assumed = (courses || []).map(function (c) {
-      return { id: c.id, units: c.units, officialGrade: c.assumedGrade, included: c.included !== false };
-    });
-    var r = Gpa.computeGpa(assumed, resolution);
-    return {
-      predicted: true,
-      value: r.value,
-      computedFields: r.computedFields,
-      skippedFields: r.skippedFields,
-      computedCourses: r.computedCourses,
-      skippedCourses: r.skippedCourses,
-      status: r.status,
-      note: 'predicted GPA, not official'
-    };
-  }
-
-  return { predictGpa: predictGpa };
-
+(function(root,factory){
+ if(typeof module==='object'&&module.exports)module.exports=factory(require('./gpa-aggregation-engine.js'));
+ else root.GpaScenarioEngine=factory(root.GpaAggregationEngine);
+})(typeof self!=='undefined'?self:this,function(Gpa){
+ 'use strict';
+ function predictGpa(courses,resolution){
+  var assumed=Array.isArray(courses)?courses.map(function(c){
+   return c&&Object.assign({},c,{officialGrade:c.assumedGrade});
+  }):courses;
+  var r=Gpa.computeGpa(assumed,resolution);
+  return Object.assign({},r,{predicted:true,computedFields:r.value==null?[]:['predictedGpa'],note:'predicted GPA, not official'});
+ }
+ return {predictGpa:predictGpa};
 });

@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "serve": "npx --yes serve public",
-    "test": "node tests/engine.test.js && node tests/storage.test.js && node tests/db.test.js"
+    "test": "node scripts/build-rule-validator.cjs --check && node --test tests/*.test.js",
+    "build:rules": "node scripts/build-rule-validator.cjs"
   },
   "keywords": [
     "gpa",
@@ -17,5 +18,8 @@
     "vanilla-js",
     "gpa-calculator"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "ajv": "8.17.1"
+  }
 }
