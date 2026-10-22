@@ -50,3 +50,14 @@ test('nextId 從空集合回傳 1，並取最大 id + 1', () => {
   assert.strictEqual(Storage.nextId([]), 1);
   assert.strictEqual(Storage.nextId([{ id: 3 }, { id: 7 }]), 8);
 });
+
+test('IT114105 範本可取得（5 學期 / 34 課程 / 5 評核）', () => {
+  const tpl = Storage.template();
+  assert.strictEqual(tpl.terms.length, 5);
+  assert.strictEqual(tpl.courses.length, 34);
+  assert.strictEqual(tpl.assessments.length, 5);
+  assert.strictEqual(tpl.courses[0].code, 'ITP3914');
+  // 每次取得都是獨立副本（避免污染種子）
+  tpl.courses.pop();
+  assert.strictEqual(Storage.template().courses.length, 34);
+});

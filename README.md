@@ -24,7 +24,7 @@ A **100% client-side, offline-capable** GPA (Grade Point Average) tracker and ca
 - **Zero backend server** — no Express, no SQLite; the static frontend talks directly to Supabase (Backend-as-a-Service) or runs fully offline.
 - **Guest mode** — without an account, everything works offline with localStorage persistence.
 - **User accounts & cloud sync** — sign up / sign in via Supabase Auth; grades are stored in your own Supabase project with row-level isolation (RLS).
-- **Fully customizable courses** — add your own semesters, courses (code / title / credits) and assessments; no hardcoded curriculum.
+- **Fully customizable courses** — build your own semesters, courses (code / title / credits) and assessments from scratch, or load the built-in **IT114105 template** as a starting point.
 - **VTC / IVE grading rules** — A/A-/B+/…/F grade → grade point (GP) lookup table.
 - **CA / EA dual threshold** — CA and EA each require 40% to pass, independently flagged.
 - **Real-time target tracking** — shows the required average with **ceiling rounding** (e.g. 67.34% → 67.4%) so you never fall 0.02 short.

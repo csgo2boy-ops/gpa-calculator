@@ -89,8 +89,11 @@
     return '<div class="empty-state">' +
       '<div class="empty-icon">📘</div>' +
       '<h3 class="empty-title">歡迎使用 GPA Tracker</h3>' +
-      '<p class="empty-desc">尚未新增任何學期。先新增一個學期，再於該學期下新增科目與評核。</p>' +
-      '<button class="btn btn-primary" onclick="window.__gpa.openTermModal()">＋ 新增第一個學期</button>' +
+      '<p class="empty-desc">你可以從零開始建立自己的課程，或一鍵載入 IT114105 的預設課程作為起點。</p>' +
+      '<div class="empty-actions">' +
+        '<button class="btn btn-primary" onclick="window.__gpa.openTermModal()">＋ 從零開始</button>' +
+        '<button class="btn btn-ghost" onclick="window.__gpa.loadTemplate()">📋 使用 IT114105 預設課程</button>' +
+      '</div>' +
     '</div>';
   }
 
@@ -418,6 +421,17 @@
     await commit();
   }
 
+  // ---------- 載入 IT114105 範本 ----------
+  async function loadTemplate() {
+    var tpl = Storage.template();
+    if (!tpl || !tpl.terms || tpl.terms.length === 0) { alert('沒有可用的範本課程。'); return; }
+    if (state.terms.length > 0) {
+      if (!confirm('目前已有資料，載入範本會覆蓋目前內容，確定嗎？')) return;
+    }
+    state = { version: 1, terms: tpl.terms, courses: tpl.courses, assessments: tpl.assessments };
+    await commit();
+  }
+
   // ---------- 匯出 / 匯入 / 清空 ----------
   function exportBackup() {
     var data = Storage.exportJson(state);
@@ -542,7 +556,8 @@
     openTermModal: openTermModal,
     closeTermModal: closeTermModal,
     openCourseModal: openCourseModal,
-    closeCourseModal: closeCourseModal
+    closeCourseModal: closeCourseModal,
+    loadTemplate: loadTemplate
   };
 
   // ---------- 認證狀態監聽 ----------

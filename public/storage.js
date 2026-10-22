@@ -43,6 +43,13 @@
     return { version: SCHEMA_VERSION, terms: terms, courses: courses, assessments: assessments };
   }
 
+  // 取得可選範本（例如 IT114105 課程）
+  function template() {
+    var seed = getSeed();
+    if (seed && seed.template) return clone(seed.template);
+    return { terms: [], courses: [], assessments: [] };
+  }
+
   // 驗證並正規化外來資料形狀；無效回傳 null
   function normalize(data) {
     if (!data || typeof data !== 'object') return null;
@@ -127,6 +134,7 @@
     clear: clear,
     exportJson: exportJson,
     importJson: importJson,
-    nextId: nextId
+    nextId: nextId,
+    template: template
   };
 });
