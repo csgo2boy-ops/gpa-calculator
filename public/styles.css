@@ -568,5 +568,77 @@ body {
   .toast { max-width: none; }
 }
 
+/* =====================================================================
+ * 響應式：平板與手機適配
+ * ===================================================================== */
+
+/* ---------- 平板 (768–1023px) ---------- */
+@media (max-width: 1023px) {
+  body { padding: 1.25rem; }
+  .navbar { padding: 0.75rem 1.25rem; }
+  .layout { gap: 1.5rem; }
+  .card { padding: 1.25rem; }
+}
+
+/* ---------- 手機與直向平板 (< 768px) ---------- */
+@media (max-width: 767px) {
+  body { padding: 1rem 0.875rem; }
+
+  /* 導覽列：允許換行、縮小間距 */
+  .navbar { padding: 0.625rem 0.875rem; flex-wrap: wrap; gap: 0.5rem; }
+  .navbar-brand { font-size: 1rem; }
+  .navbar-account { gap: 0.4rem; }
+  .nav-email { max-width: 9rem; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 頂部標題與按鈕 */
+  .header { flex-direction: column; align-items: stretch; gap: 0.75rem; margin-bottom: 1.5rem; }
+  .header-actions { width: 100%; gap: 0.5rem; }
+  .header-actions .btn { flex: 1 1 auto; justify-content: center; }
+
+  /* 版面：側欄不再黏頂、上下堆疊 */
+  .layout { gap: 1.25rem; }
+  .panel { position: static; padding: 1rem; }
+
+  /* 科目卡片：標題與分數上下排 */
+  .card { padding: 1rem; }
+  .card-head { flex-direction: column; gap: 0.75rem; }
+  .card-score { text-align: left; }
+  .score-big { font-size: 1.5rem; }
+
+  /* 學期標題：按鈕換行、隱藏裝飾橫線（避免換行時對不齊） */
+  .semester-header { flex-wrap: wrap; gap: 0.5rem; padding-top: 1.25rem; padding-bottom: 0.5rem; }
+  .semester-header::before { display: none; }
+  .semester-title { font-size: 1.1rem; }
+  .semester-header .semester-add { margin-left: 0; }
+
+  /* 評核表格：橫向卷動，避免擠壓 */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table { min-width: 32rem; }
+
+  /* 目標區塊：上下排 */
+  .target-block { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+
+  /* 彈窗內距縮小 */
+  .modal-body { padding: 1rem; }
+  .modal-head { padding: 0.875rem 1rem; }
+
+  /* 空白狀態 */
+  .empty-state { padding: 2rem 1rem; }
+  .empty-actions { flex-direction: column; }
+  .empty-actions .btn { width: 100%; justify-content: center; }
+}
+
+/* ---------- 小手機 (< 480px) ---------- */
+@media (max-width: 480px) {
+  body { padding: 0.75rem 0.625rem; }
+  .navbar-badge { display: none; }
+  .header-actions .btn { flex: 1 1 100%; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .cgpa-value { font-size: 1.75rem; }
+  .empty-icon { font-size: 2.5rem; }
+  .empty-title { font-size: 1.1rem; }
+}
+
+
 
 
