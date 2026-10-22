@@ -94,6 +94,20 @@
     return { ok: true };
   }
 
+  async function signInWithGoogle() {
+    if (!isAvailable()) return { ok: false, error: 'Supabase 尚未設定，請先到 config.js 填入專案 URL 與 Anon Key。' };
+    var redirectTo = (typeof window !== 'undefined' && window.location && window.location.origin)
+      ? window.location.origin
+      : undefined;
+    var res = await client.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: redirectTo }
+    });
+    if (res.error) return { ok: false, error: translateError(res.error) };
+    // 成功時 SDK 會自動將瀏覽器導向 Google；回跳後由 getSession / onAuthStateChange 捕獲 Session
+    return { ok: true };
+  }
+
   async function signOut() {
     if (client) {
       try { await client.auth.signOut(); } catch (e) { /* ignore */ }
@@ -111,6 +125,7 @@
     onAuthChange: onAuthChange,
     signUp: signUp,
     signIn: signIn,
+    signInWithGoogle: signInWithGoogle,
     signOut: signOut
   };
 });

@@ -442,3 +442,32 @@ body {
 }
 .auth-error-info { color: var(--emerald-text); background: var(--emerald-bg); border-color: var(--emerald-border); }
 
+/* ---------- 第三方登入 ---------- */
+.auth-social { padding: 0 1.5rem 1.5rem; }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  color: var(--text-400);
+  font-size: 0.8125rem;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-200);
+}
+.btn-google {
+  width: 100%;
+  justify-content: center;
+  background: #fff;
+  border-color: var(--border-300);
+  color: var(--text-700);
+  font-weight: 500;
+  gap: 0.625rem;
+}
+.btn-google:hover { background: var(--surface); }
+.google-icon { flex-shrink: 0; }
+

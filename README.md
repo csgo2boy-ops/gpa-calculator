@@ -88,6 +88,7 @@ npx wrangler pages deploy public
 3. 到 **Project Settings → API**，複製 **Project URL** 與 **anon public key**。
 4. 開啟 `public/config.js`，填入 `SUPABASE_URL` 與 `SUPABASE_ANON_KEY`。
 5. 到 **Authentication → Providers → Email** 啟用 Email 認證（可關閉「確認 Email」以方便測試）。
+6. （選用，Google 快捷登入）到 **Authentication → Providers → Google**，填入 Google Cloud 的 OAuth Client ID / Secret 並啟用；再到 **Authentication → URL Configuration → Redirect URLs**，加入你的網站網址（例如 `https://<專案>.pages.dev` 與本機 `http://localhost:3000`）。
 
 > ⚠️ 安全提醒：只能使用「公開的」Anon / Publishable Key，**絕對不要**把 Service Role Key 放進前端（它可繞過 RLS，一旦外洩即代表所有使用者資料曝險）。
 

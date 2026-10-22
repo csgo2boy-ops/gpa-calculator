@@ -461,6 +461,14 @@
     closeAuthModal();
   });
 
+  document.getElementById('btn-google').addEventListener('click', async function () {
+    var res = await Auth.signInWithGoogle();
+    if (!res.ok) {
+      showAuthError(res.error);
+    }
+    // 成功時瀏覽器會被導向 Google 授權頁，回跳後由 onAuthStateChange 自動登入
+  });
+
   // ---------- 事件委派 ----------
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-action]');
