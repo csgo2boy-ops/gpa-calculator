@@ -105,31 +105,56 @@
     return rowsToState({ semesters: s, courses: c, assessments: a });
   }
 
-  async function persistCloud(state) {
-    var client = Auth.getClient();
-    var userId = Auth.getUser().id;
+  function withUser(rows, userId) {
+    return rows.map(function (r) { return Object.assign({ user_id: userId }, r); });
+  }
+
+  async function upsertTable(client, table, rows, userId) {
+    if (!rows.length) return;
+    var res = await client.from(table).upsert(withUser(rows, userId), { onConflict: 'user_id,local_id' });
+    if (res && res.error) throw res.error;
+  }
+
+  async function deleteMissing(client, userId, table, keepIds) {
+    var q = client.from(table).delete().eq('user_id', userId);
+    if (keepIds.length) q = q.not('local_id', 'in', '(' + keepIds.join(',') + ')');
+    var res = await q;
+    if (res && res.error) throw res.error;
+  }
+
+  // 寫回雲端：先 upsert（新增/更新），最後才刪除多餘列。
+  // 任何一步失敗 → throw，呼叫端顯示「同步失敗」，且雲端舊資料仍在（不會先刪光）。
+  // 寫入前先在本機留一份備份，供失敗時回復。
+  async function persistCloud(state, deps) {
+    var client = (deps && deps.client) || Auth.getClient();
+    var userId = (deps && deps.userId) || (Auth.getUser() && Auth.getUser().id);
     var rows = stateToRows(state);
 
-    // 簡易「全量快照」策略：先刪後寫。資料量小（< 100 列），最穩健且能正確處理刪除。
-    var d3 = await client.from('assessments').delete().eq('user_id', userId);
-    var d2 = await client.from('courses').delete().eq('user_id', userId);
-    var d1 = await client.from('semesters').delete().eq('user_id', userId);
-    if (d1.error) throw d1.error;
-    if (d2.error) throw d2.error;
-    if (d3.error) throw d3.error;
+    try { Storage.saveBackup(state); } catch (e) { /* 備份失敗不阻擋主流程 */ }
 
-    if (rows.semesters.length) {
-      var i1 = await client.from('semesters').insert(rows.semesters);
-      if (i1.error) throw i1.error;
+    await upsertTable(client, 'semesters', rows.semesters, userId);
+    await upsertTable(client, 'courses', rows.courses, userId);
+    await upsertTable(client, 'assessments', rows.assessments, userId);
+
+    await deleteMissing(client, userId, 'assessments', rows.assessments.map(function (r) { return r.local_id; }));
+    await deleteMissing(client, userId, 'courses', rows.courses.map(function (r) { return r.local_id; }));
+    await deleteMissing(client, userId, 'semesters', rows.semesters.map(function (r) { return r.local_id; }));
+  }
+
+  // 安全合併：以 id 為鍵取聯集，避免重複與 ID 衝突；同一 id 以雲端版本為優先（不覆蓋雲端既有資料）。
+  function mergeStates(cloudState, localState) {
+    function mergeArr(cloudArr, localArr) {
+      var byId = {}, order = [];
+      (cloudArr || []).forEach(function (x) { if (!byId[x.id]) { byId[x.id] = x; order.push(x.id); } });
+      (localArr || []).forEach(function (x) { if (!byId[x.id]) { byId[x.id] = x; order.push(x.id); } });
+      return order.map(function (id) { return byId[id]; });
     }
-    if (rows.courses.length) {
-      var i2 = await client.from('courses').insert(rows.courses);
-      if (i2.error) throw i2.error;
-    }
-    if (rows.assessments.length) {
-      var i3 = await client.from('assessments').insert(rows.assessments);
-      if (i3.error) throw i3.error;
-    }
+    return {
+      version: 1,
+      terms: mergeArr(cloudState.terms, localState.terms),
+      courses: mergeArr(cloudState.courses, localState.courses),
+      assessments: mergeArr(cloudState.assessments, localState.assessments)
+    };
   }
 
   // ---------- 統一介面 ----------
@@ -156,6 +181,8 @@
     syncLocalToCloud: syncLocalToCloud,
     stateToRows: stateToRows,
     rowsToState: rowsToState,
-    seedState: seedState
+    seedState: seedState,
+    mergeStates: mergeStates,
+    _persistCloud: persistCloud
   };
 });

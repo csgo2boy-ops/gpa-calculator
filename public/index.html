@@ -240,6 +240,7 @@
         <input type="file" id="import-file" accept="application/json,.json" class="hidden">
         <button id="btn-import" class="btn btn-ghost">⇪ 匯入備份</button>
         <button id="btn-export" class="btn btn-ghost">⇩ 匯出備份</button>
+        <button id="btn-restore" class="btn btn-ghost">↩ 還原備份</button>
         <button id="btn-reset" class="btn btn-ghost btn-reset">↺ 清空資料</button>
       </div>
     </header>
@@ -269,6 +270,24 @@
     <footer class="footer">
       訪客模式資料儲存於本機瀏覽器；登入後資料雲端同步，不會公開給其他使用者。
     </footer>
+  </div>
+
+  <!-- 同步衝突 Modal（保留雲端 / 保留本機 / 安全合併）-->
+  <div id="sync-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 class="modal-title">資料同步</h3>
+      </div>
+      <div class="modal-body">
+        <p class="sync-desc">偵測到本機暫存資料，而雲端也已有成績。請選擇要如何處理（不會自動覆蓋雲端）：</p>
+        <div class="sync-options">
+          <button type="button" class="btn btn-ghost" data-sync="cloud">☁ 保留雲端資料</button>
+          <button type="button" class="btn btn-ghost" data-sync="local">💾 保留本機資料（上傳覆蓋雲端）</button>
+          <button type="button" class="btn btn-primary" data-sync="merge">🔀 安全合併（不重複）</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="toast-container" class="toast-container" aria-live="polite"></div>

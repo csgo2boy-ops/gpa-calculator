@@ -52,6 +52,76 @@ test('rowsToState 正確對映 null（earned/max/code）', () => {
   assert.strictEqual(state.courses[0].termId, 1);
 });
 
+function makeMockClient(opts) {
+  const ops = [];
+  function builder(table) {
+    return {
+      upsert(rows, o) {
+        ops.push({ op: 'upsert', table, count: rows.length, onConflict: o && o.onConflict });
+        if (opts && opts.failUpsert === table) return Promise.resolve({ error: { message: 'upsert failed' } });
+        return Promise.resolve({ error: null });
+      },
+      delete() {
+        return {
+          eq() {
+            const q = {
+              not(col, op, val) {
+                ops.push({ op: 'delete-not', table, col, val });
+                return Promise.resolve({ error: null });
+              },
+              then(res) { ops.push({ op: 'delete-all', table }); res({ error: null }); return null; }
+            };
+            return q;
+          }
+        };
+      }
+    };
+  }
+  return { from: builder, ops };
+}
+
+test('mergeStates：以 id 取聯集、不重複、雲端優先', () => {
+  const cloud = { version: 1, terms: [{ id: 1, name: 'CloudTerm', sortOrder: 1 }], courses: [{ id: 1, termId: 1, title: 'CloudCourse', credits: 3 }], assessments: [] };
+  const local = {
+    version: 1,
+    terms: [{ id: 1, name: 'LocalTerm' }, { id: 2, name: 'LocalTerm2' }],
+    courses: [{ id: 1, termId: 1, title: 'LocalCourse', credits: 3 }, { id: 2, termId: 1, title: 'LocalCourse2', credits: 3 }],
+    assessments: [{ id: 1, courseId: 1, name: 'A', assessmentGroup: 'CA', weightPercent: 50, maxPoints: 100, earnedPoints: 80 }]
+  };
+  const m = Db.mergeStates(cloud, local);
+  assert.strictEqual(m.terms.length, 2);
+  assert.strictEqual(m.courses.length, 2);
+  assert.strictEqual(m.assessments.length, 1);
+  assert.strictEqual(m.terms.find(t => t.id === 1).name, 'CloudTerm');
+  assert.strictEqual(m.courses.find(c => c.id === 2).title, 'LocalCourse2');
+});
+
+test('persistCloud：先 upsert 再刪除多餘列（不先刪光）', async () => {
+  const client = makeMockClient();
+  const state = {
+    version: 1,
+    terms: [{ id: 1, name: 'S1', sortOrder: 1 }],
+    courses: [{ id: 1, termId: 1, code: null, title: 'C1', credits: 3, gpaInclusion: 'include', officialMark: null, officialGP: null, crossSemesterPolicy: 'single', targetGrade: 'A' }],
+    assessments: [{ id: 1, courseId: 1, name: 'A1', assessmentGroup: 'CA', weightPercent: 100, maxPoints: 100, earnedPoints: 50 }]
+  };
+  await Db._persistCloud(state, { client, userId: 'u1' });
+  const ops = client.ops.map(o => o.op);
+  const lastUpsert = ops.lastIndexOf('upsert');
+  const firstDelete = ops.findIndex(o => o.indexOf('delete') === 0);
+  assert.ok(lastUpsert >= 0 && firstDelete > lastUpsert, 'upsert 必須在 delete 之前');
+  const dn = client.ops.find(o => o.op === 'delete-not');
+  assert.ok(dn && dn.col === 'local_id', '刪除應使用 not-in 只刪多餘列');
+});
+
+test('persistCloud：upsert 失敗時丟出錯誤且不執行刪除', async () => {
+  const client = makeMockClient({ failUpsert: 'courses' });
+  const state = { version: 1, terms: [{ id: 1, name: 'S1', sortOrder: 1 }], courses: [{ id: 1, termId: 1, title: 'C1', credits: 3 }], assessments: [] };
+  let threw = false;
+  try { await Db._persistCloud(state, { client, userId: 'u1' }); } catch (e) { threw = true; }
+  assert.strictEqual(threw, true);
+  assert.strictEqual(client.ops.find(o => o.op.indexOf('delete') === 0), undefined, '失敗時不應執行刪除');
+});
+
 test('訪客模式：未登入時 isCloud=false，loadState 回傳空白', async () => {
   assert.strictEqual(Db.isCloud(), false);
   const state = await Db.loadState();

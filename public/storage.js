@@ -11,6 +11,7 @@
   'use strict';
 
   var STORAGE_KEY = 'gpa-tracker-data';
+  var BACKUP_KEY = 'gpa-tracker-backup';
   var SCHEMA_VERSION = 1;
 
   // --- 種子資料取得（瀏覽器用全域 GpaSeed；Node 用 require） ---
@@ -48,6 +49,34 @@
     var seed = getSeed();
     if (seed && seed.template) return clone(seed.template);
     return { terms: [], courses: [], assessments: [] };
+  }
+
+  // ---------- 安全備份（雲端寫入前 / 清空 / 匯入前）----------
+  var memoryBackup = null;
+  function saveBackup(state) {
+    var store = backend();
+    var payload = JSON.stringify({ savedAt: new Date().toISOString(), state: clone(state) });
+    if (store) {
+      try { store.setItem(BACKUP_KEY, payload); return true; } catch (e) { return false; }
+    }
+    memoryBackup = payload;
+    return true;
+  }
+
+  function loadBackup() {
+    var store = backend();
+    var raw = null;
+    if (store) {
+      try { raw = store.getItem(BACKUP_KEY); } catch (e) { raw = null; }
+    } else {
+      raw = memoryBackup;
+    }
+    if (!raw) return null;
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.state) return null;
+      return { savedAt: parsed.savedAt, state: normalize(parsed.state) || parsed.state };
+    } catch (e) { return null; }
   }
 
   // 驗證並正規化外來資料形狀；無效回傳 null
@@ -135,6 +164,9 @@
     exportJson: exportJson,
     importJson: importJson,
     nextId: nextId,
-    template: template
+    template: template,
+    BACKUP_KEY: BACKUP_KEY,
+    saveBackup: saveBackup,
+    loadBackup: loadBackup
   };
 });

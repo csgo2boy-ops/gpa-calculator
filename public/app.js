@@ -477,8 +477,10 @@
     if (state.terms.length > 0) {
       if (!confirm('目前已有資料，載入範本會覆蓋目前內容，確定嗎？')) return;
     }
+    Storage.saveBackup(state);
     state = { version: 1, terms: tpl.terms, courses: tpl.courses, assessments: tpl.assessments };
     await commit();
+    toast('已載入 IT114105 範本（可按「還原備份」回復）。', 'success');
   }
 
   // ---------- 匯出 / 匯入 / 清空 ----------
@@ -506,15 +508,27 @@
       catch (err) { toast('無法解析 JSON 檔案，請確認是正確的備份檔。'); fileInput.value = ''; return; }
       var result = Storage.importJson(data);
       if (!result.ok) { toast(result.error); }
-      else { state = result.state; await commit(); toast('匯入成功：' + state.terms.length + ' 學期、' + state.courses.length + ' 科目、' + state.assessments.length + ' 評核。', 'success'); }
+      else { Storage.saveBackup(state); state = result.state; await commit(); toast('匯入成功：' + state.terms.length + ' 學期、' + state.courses.length + ' 科目、' + state.assessments.length + ' 評核。', 'success'); }
       fileInput.value = '';
     };
     reader.readAsText(file, 'utf-8');
   }
   async function resetData() {
-    if (!confirm('確定要清空目前所有資料嗎？（學期、科目、評核都會被刪除）此動作無法復原。')) return;
+    if (!confirm('確定要清空目前所有資料嗎？（學期、科目、評核都會被刪除）\n清空前會自動建立一份可還原的備份。')) return;
+    Storage.saveBackup(state);
     state = { version: 1, terms: [], courses: [], assessments: [] };
     await commit();
+    toast('已清空。如需回復，請按「還原備份」。', 'success');
+  }
+
+  async function restoreBackup() {
+    var b = Storage.loadBackup();
+    if (!b || !b.state) { toast('沒有可還原的備份。'); return; }
+    if (!confirm('確定要還原到 ' + (b.savedAt || '上次備份') + ' 的資料嗎？目前內容會被覆蓋（還原前會再備份一次）。')) return;
+    Storage.saveBackup(state);
+    state = b.state;
+    await commit();
+    toast('已還原備份。', 'success');
   }
 
   // ---------- 認證 Modal ----------
@@ -609,6 +623,7 @@
   document.getElementById('btn-import').addEventListener('click', function () { document.getElementById('import-file').click(); });
   document.getElementById('import-file').addEventListener('change', importBackup);
   document.getElementById('btn-reset').addEventListener('click', resetData);
+  document.getElementById('btn-restore').addEventListener('click', restoreBackup);
 
   // 暴露給 inline onclick
   window.__gpa = {
@@ -627,18 +642,56 @@
     closeHelpModal: closeHelpModal
   };
 
+  // ---------- 同步衝突處理（保留雲端 / 保留本機 / 安全合併）----------
+  function askSyncConflict() {
+    return new Promise(function (resolve) {
+      var modal = document.getElementById('sync-modal');
+      if (!modal) { resolve('cloud'); return; }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      function handler(e) {
+        var b = e.target.closest('[data-sync]');
+        if (!b) return;
+        cleanup();
+        resolve(b.getAttribute('data-sync'));
+      }
+      function cleanup() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.removeEventListener('click', handler);
+      }
+      modal.addEventListener('click', handler);
+    });
+  }
+
   // ---------- 認證狀態監聽 ----------
   Auth.onAuthChange(async function (user, event) {
     renderNavbar();
     if (event === 'SIGNED_IN') {
       try {
-        if (Db.hasLocalData()) {
-          var ok = confirm('偵測到本地暫存資料，是否將成績同步至您的雲端帳號？');
-          if (ok) await Db.syncLocalToCloud(Db.readLocalState());
+        var localHas = Db.hasLocalData();
+        var cloudState = null;
+        try { cloudState = await Db.loadState(); } catch (e2) { console.error(e2); }
+        var cloudHas = !!(cloudState && cloudState.courses && cloudState.courses.length > 0);
+
+        if (localHas && cloudHas) {
+          var choice = await askSyncConflict();
+          if (choice === 'local') {
+            await Db.syncLocalToCloud(Db.readLocalState());
+          } else if (choice === 'merge') {
+            await Db.persist(Db.mergeStates(cloudState, Db.readLocalState()));
+          }
+          // choice === 'cloud' → 保留雲端，不動作
+        } else if (localHas && !cloudHas) {
+          if (confirm('雲端尚無資料，是否將本機暫存資料同步到雲端？')) {
+            await Db.syncLocalToCloud(Db.readLocalState());
+          }
         }
+
         state = await Db.loadState();
         render();
-      } catch (e) { console.error(e); }
+        if (Auth.isLoggedIn()) setSyncStatus('ok');
+      } catch (e) { console.error(e); setSyncStatus('error'); }
     } else if (event === 'SIGNED_OUT') {
       try { state = await Db.loadState(); render(); } catch (e) { console.error(e); }
     }

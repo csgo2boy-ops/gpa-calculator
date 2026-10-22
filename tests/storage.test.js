@@ -61,3 +61,18 @@ test('IT114105 範本可取得（5 學期 / 34 課程 / 5 評核）', () => {
   tpl.courses.pop();
   assert.strictEqual(Storage.template().courses.length, 34);
 });
+
+test('saveBackup / loadBackup 往返（含 savedAt、獨立副本）', () => {
+  const state = Storage.load();
+  state.terms.push({ id: 1, name: 'S1', sortOrder: 1 });
+  state.courses.push({ id: 1, termId: 1, code: 'X', title: 'T', credits: 3, gpaInclusion: 'include', officialMark: null, officialGP: null, crossSemesterPolicy: 'single', targetGrade: 'A' });
+  assert.strictEqual(Storage.saveBackup(state), true);
+  const b = Storage.loadBackup();
+  assert.ok(b && b.state);
+  assert.ok(typeof b.savedAt === 'string' && b.savedAt.length > 0);
+  assert.strictEqual(b.state.terms.length, 1);
+  assert.strictEqual(b.state.courses[0].title, 'T');
+  // 修改原 state 不影響備份（獨立副本）
+  state.courses[0].title = 'CHANGED';
+  assert.strictEqual(Storage.loadBackup().state.courses[0].title, 'T');
+});
