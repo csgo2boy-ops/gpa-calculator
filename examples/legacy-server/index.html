@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPA Tracker - 本機成績追蹤</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Noto Sans TC"', 'sans-serif'] },
+          colors: { primary: '#4f46e5', surface: '#f8fafc' }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #f8fafc; font-family: 'Noto Sans TC', sans-serif; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .badge { padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.025em; }
+    .bg-secured { background-color: #e0e7ff; color: #3730a3; }
+    .bg-pending { background-color: #fef3c7; color: #92400e; }
+    .bg-danger { background-color: #fee2e2; color: #991b1b; }
+    .term-title-bg { background-color: #f8fafc; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+    .modal-backdrop { background-color: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); }
+  </style>
+</head>
+<body class="p-4 md:p-8 text-slate-700 relative">
+  
+  <!-- Modal 表單 -->
+  <div id="assessment-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 modal-backdrop transition-opacity" onclick="closeModal()"></div>
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md relative z-10 overflow-hidden transform transition-all animate-fade-in">
+      <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+        <h3 id="modal-title" class="text-lg font-bold text-slate-800">新增評核項目</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      
+      <form id="assessment-form" class="p-6 space-y-4">
+        <input type="hidden" id="form-id">
+        <input type="hidden" id="form-courseId">
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">評核名稱</label>
+          <input type="text" id="form-name" required class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="例如：期末考、小測 1">
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">組別</label>
+            <select id="form-group" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="CA">CA (平時分)</option>
+              <option value="EA">EA (期末/總評)</option>
+              <option value="作業">作業</option>
+              <option value="專題">專題</option>
+              <option value="考試">考試 (計入EA門檻)</option>
+              <option value="其他">其他 (不計EA門檻)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">佔比權重 (%)</label>
+            <input type="number" id="form-weight" required min="0" max="100" step="0.1" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例如：20">
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">滿分 <span class="text-xs text-slate-400 font-normal">(未知可留空)</span></label>
+            <input type="number" id="form-max" min="1" step="0.1" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例如：100">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">獲得得分 <span class="text-xs text-slate-400 font-normal">(未評分留空)</span></label>
+            <input type="number" id="form-earned" min="0" step="0.1" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="留空">
+          </div>
+        </div>
+        
+        <div class="pt-4 flex justify-end gap-3">
+          <button type="button" onclick="closeModal()" class="px-5 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">取消</button>
+          <button type="submit" class="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-sm transition-colors">儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="max-w-6xl mx-auto">
+    <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <div>
+        <h1 class="text-3xl md:text-4xl font-bold text-slate-800 tracking-tight">
+          GPA Tracker <span class="text-sm font-normal text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md ml-2 align-middle">IT114105</span>
+        </h1>
+        <p class="text-sm text-slate-500 mt-2">資料來源：使用者提供之簡報與課程結構照片。未確認之校規將顯示為待確認。</p>
+      </div>
+      <div class="flex gap-3">
+        <input type="file" id="import-file" accept="application/json,.json" class="hidden" onchange="importBackup()">
+        <button onclick="document.getElementById('import-file').click()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L5 8m4-4v12"></path></svg>
+          匯入備份
+        </button>
+        <a href="/api/export" download="gpa-backup.json" class="px-4 py-2 bg-white border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          匯出備份
+        </a>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div class="md:col-span-1">
+        <div class="bg-white rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-100 p-5 sticky top-8 animate-fade-in">
+          <h2 class="font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+            學期總覽
+          </h2>
+          <ul id="term-list" class="space-y-2 text-sm"></ul>
+          
+          <div class="mt-8 pt-6 border-t border-slate-100 text-sm">
+            <h3 class="font-bold text-slate-800 mb-1 flex items-center gap-2">
+              <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              CGPA 狀態
+            </h3>
+            <p class="text-slate-400 text-xs mb-3">排除「GPA 入帳待確認」科目</p>
+            <div id="cgpa-display" class="text-4xl font-bold text-indigo-600 tracking-tight">--</div>
+            <div id="cgpa-coverage" class="text-xs text-slate-400 mt-2 bg-slate-50 p-2 rounded-md"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="md:col-span-3">
+        <div id="course-container" class="space-y-4"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let state = { terms: [], courses: [] };
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    async function fetchData() {
+      const res = await fetch('/api/data');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: '無法載入資料' }));
+        document.getElementById('course-container').innerHTML =
+          `<div class="bg-white rounded-2xl p-6 text-red-600 border border-red-200">載入失敗：${escapeHtml(err.error)}</div>`;
+        return;
+      }
+      state = await res.json();
+      render();
+    }
+
+    // CA / EA 獨立門檻 Badge
+    function groupBadge(label, g) {
+      if (!g || g.weight <= 0) return '';
+      if (g.pass === 'pending') {
+        return `<span class="badge bg-pending border border-amber-200">⏳ ${label} 待評分</span>`;
+      }
+      const pct = g.percentage !== null ? g.percentage.toFixed(1) : '--';
+      if (g.pass === false) {
+        return `<span class="badge bg-danger border border-red-200">✗ ${label} 未達標 (${pct}%)</span>`;
+      }
+      return `<span class="badge bg-emerald-100 text-emerald-800 border border-emerald-200">✓ ${label} 已達標 (${pct}%)</span>`;
+    }
+
+    function render() {
+      const termList = document.getElementById('term-list');
+      termList.innerHTML = state.terms.map(t => {
+        const tCourses = state.courses.filter(c => c.termId === t.id);
+        const totalCredits = tCourses.reduce((sum, c) => sum + (Number(c.credits) || 0), 0);
+        return `<li class="flex justify-between items-center p-2 rounded-lg hover:bg-indigo-50 cursor-pointer transition-colors text-slate-600">
+          <span class="font-medium">${escapeHtml(t.name)}</span>
+          <span class="text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded text-xs font-bold">${totalCredits} cr</span>
+        </li>`;
+      }).join('');
+
+      const container = document.getElementById('course-container');
+      
+      const htmlContent = state.terms.map(t => {
+        const tCourses = state.courses.filter(c => c.termId === t.id);
+        if (tCourses.length === 0) return ''; 
+
+        const semesterHeader = `
+          <div class="relative pt-8 mt-6 pb-4">
+            <div class="absolute inset-0 flex items-center" aria-hidden="true">
+              <div class="w-full border-t border-slate-200"></div>
+            </div>
+            <div class="relative flex justify-start">
+              <span class="pr-4 term-title-bg text-xl font-bold text-slate-800 flex items-center gap-2">
+                <span class="w-2 h-6 bg-indigo-500 rounded-sm"></span>
+                ${escapeHtml(t.name)}
+              </span>
+            </div>
+          </div>
+        `;
+
+        const courseCards = tCourses.map(c => {
+          const s = c.stats;
+          const isCrossTermPending = c.gpaInclusion === 'needs-review';
+          const issueBadges = (s.issues || []).map(i => `<span class="badge bg-danger border border-red-200">⚠ ${escapeHtml(i)}</span>`).join('');
+
+          // 目標狀態渲染
+          let targetHtml = '';
+          if (s.targetStatus === 'locked') {
+            targetHtml = `<div class="text-emerald-600 font-bold flex items-center gap-1">🎉 已達標！</div>`;
+          } else if (s.targetStatus === 'impossible') {
+            targetHtml = `<div class="text-red-500 font-bold flex items-center gap-1">⚠️ 目標已無法達成（最高可達 ${s.maxFinal.toFixed(1)} 分）</div>`;
+          } else if (s.targetStatus === 'failed') {
+            targetHtml = `<div class="text-slate-500 font-bold">已評分完畢，未達目標</div>`;
+          } else {
+            const req = s.requiredAvg !== null ? s.requiredAvg.toFixed(1) : '--';
+            targetHtml = `<div class="text-slate-600">剩餘評核平均需達 <strong class="text-indigo-600 text-base">${req}%</strong></div>`;
+          }
+
+          return `
+          <div class="bg-white rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-slate-100 p-6 hover:shadow-lg transition-shadow duration-300 animate-fade-in">
+            <div class="flex justify-between items-start mb-4">
+              <div>
+                <h3 class="font-bold text-lg text-slate-800 leading-tight">${escapeHtml(c.title)}</h3>
+                <div class="flex items-center gap-3 mt-2 text-sm text-slate-500">
+                  <span class="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs">${escapeHtml(c.code || '無代碼')}</span>
+                  <span class="flex items-center gap-1">
+                    學分: <strong class="text-slate-700 text-base">${c.credits}</strong>
+                    <button onclick="editCredits(${c.id}, ${c.credits})" class="text-indigo-400 hover:text-indigo-600 transition-colors ml-1" title="修改學分">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+              <div class="text-right flex-shrink-0">
+                <div class="text-3xl font-bold text-slate-800 tracking-tight">${s.secured.toFixed(2)} <span class="text-sm font-normal text-slate-400">/ 已鎖定分</span></div>
+                <div class="text-xs text-slate-400 mt-1 font-medium">已評分權重: ${s.gradedWeight}% | 最高可達: ${s.maxFinal.toFixed(2)}</div>
+              </div>
+            </div>
+            
+            <div class="flex gap-2 mb-5 flex-wrap">
+              ${groupBadge('CA', s.ca)}
+              ${groupBadge('EA', s.ea)}
+              ${isCrossTermPending ? `<span class="badge bg-slate-100 text-slate-600 border border-slate-200">跨學期 GPA 入帳待確認</span>` : ''}
+              ${!s.isWeightValid ? `<span class="badge bg-danger border border-red-200">⚠ 權重合計不等於 100%</span>` : ''}
+              ${s.otherWeight > 0 ? `<span class="badge bg-pending border border-amber-200" title="非 CA/EA 的項目不參與及格線判定，請確認是否漏標。">⚠ 含有 ${s.otherWeight}% '其他' 組別</span>` : ''}
+              ${issueBadges}
+            </div>
+
+            <!-- 目標追蹤區塊 -->
+            <div class="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 mb-4 flex items-center justify-between">
+              <div class="flex items-center gap-2 text-sm">
+                <span class="text-slate-500">目標等級：</span>
+                <select onchange="updateTarget(${c.id}, this.value)" class="bg-white border border-slate-300 text-indigo-700 font-bold text-sm rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                  ${['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D'].map(g => `<option value="${g}" ${c.targetGrade === g ? 'selected' : ''}>${g} (${getMarkFromGrade(g)})</option>`).join('')}
+                </select>
+              </div>
+              <div class="text-sm font-medium">
+                ${targetHtml}
+              </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-4 text-sm mb-4 border border-slate-100">
+              <table class="w-full text-left">
+                <thead>
+                  <tr class="text-slate-400 border-b border-slate-200 text-xs">
+                    <th class="pb-2 font-medium w-1/3">評核項目</th>
+                    <th class="pb-2 font-medium">組別</th>
+                    <th class="pb-2 font-medium">權重</th>
+                    <th class="pb-2 font-medium text-right">得分 / 滿分</th>
+                    <th class="pb-2 font-medium text-right w-20">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${c.assessments.length > 0 ? c.assessments.map(a => `
+                    <tr class="border-b border-slate-100 last:border-0 hover:bg-white transition-colors group">
+                      <td class="py-2.5 font-medium text-slate-700">${escapeHtml(a.name)}</td>
+                      <td class="py-2.5"><span class="text-[10px] px-2 py-0.5 bg-white border border-slate-200 rounded-md text-slate-500">${escapeHtml(a.assessmentGroup)}</span></td>
+                      <td class="py-2.5 text-slate-600">${a.weightPercent}%</td>
+                      <td class="py-2.5 text-right font-mono ${a.earnedPoints !== null && a.maxPoints > 0 ? 'text-slate-800 font-bold' : 'text-slate-400'}">
+                        ${a.earnedPoints !== null ? a.earnedPoints : '--'} <span class="text-slate-300">/</span> ${a.maxPoints > 0 ? a.maxPoints : '未知'}
+                      </td>
+                      <td class="py-2.5 text-right">
+                        <div class="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button data-action="edit-assess" data-id="${a.id}" data-courseid="${c.id}" class="text-indigo-500 hover:text-indigo-700 p-1" title="編輯">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                          </button>
+                          <button data-action="del-assess" data-id="${a.id}" class="text-red-400 hover:text-red-600 p-1" title="刪除">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  `).join('') : `<tr><td colspan="5" class="py-4 text-center text-slate-400 text-xs">尚未新增評核項目</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="flex gap-3 mt-4 pt-4 border-t border-slate-100">
+              <button onclick="openModal(${c.id})" class="text-sm px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 shadow-sm transition-colors flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                新增評核
+              </button>
+              <button onclick="confirmCourse(${c.id})" class="text-sm px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg font-medium hover:bg-slate-50 hover:text-indigo-600 transition-colors">輸入官方成績</button>
+            </div>
+          </div>
+          `;
+        }).join('');
+
+        return semesterHeader + courseCards;
+      }).join('');
+
+      container.innerHTML = htmlContent;
+      calculateCGPA();
+    }
+
+    function getMarkFromGrade(grade) {
+      const map = {
+        'A': 75, 'A-': 70, 'B+': 67, 'B': 63, 'B-': 60,
+        'C+': 57, 'C': 53, 'C-': 50, 'D+': 46, 'D': 40, 'F': 0
+      };
+      return map[grade] !== undefined ? map[grade] : 75;
+    }
+
+    function calculateCGPA() {
+      const eligible = state.courses.filter(c => c.officialGP !== null && c.gpaInclusion === 'include');
+      let totalPoints = 0, totalCredits = 0;
+      
+      eligible.forEach(c => {
+        totalPoints += (c.officialGP * c.credits);
+        totalCredits += c.credits;
+      });
+
+      const totalIncludeCredits = state.courses
+        .filter(c => c.gpaInclusion === 'include')
+        .reduce((sum, c) => sum + c.credits, 0);
+
+      const cgpa = totalCredits > 0 ? (totalPoints / totalCredits).toFixed(2) : '--';
+      document.getElementById('cgpa-display').innerText = cgpa;
+      document.getElementById('cgpa-coverage').innerText = `覆蓋學分: ${totalCredits} / ${totalIncludeCredits}`;
+    }
+
+    // --- Modal 邏輯 ---
+    const modal = document.getElementById('assessment-modal');
+    const form = document.getElementById('assessment-form');
+
+    function openModal(courseId, editData = null) {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      
+      if (editData) {
+        document.getElementById('modal-title').innerText = '編輯評核項目';
+        document.getElementById('form-id').value = editData.id;
+        document.getElementById('form-courseId').value = courseId;
+        document.getElementById('form-name').value = editData.name;
+        document.getElementById('form-group').value = editData.assessmentGroup;
+        document.getElementById('form-weight').value = editData.weightPercent;
+        document.getElementById('form-max').value = editData.maxPoints > 0 ? editData.maxPoints : '';
+        document.getElementById('form-earned').value = editData.earnedPoints !== null ? editData.earnedPoints : '';
+      } else {
+        document.getElementById('modal-title').innerText = '新增評核項目';
+        form.reset();
+        document.getElementById('form-id').value = '';
+        document.getElementById('form-courseId').value = courseId;
+        document.getElementById('form-max').value = '100';
+      }
+    }
+
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('form-id').value;
+      const courseId = document.getElementById('form-courseId').value;
+      const name = document.getElementById('form-name').value;
+      const assessmentGroup = document.getElementById('form-group').value;
+      const weightPercent = parseFloat(document.getElementById('form-weight').value);
+
+      // 前端防呆
+      if (isNaN(weightPercent) || weightPercent < 0 || weightPercent > 100) {
+        alert('權重必須是 0 至 100 之間的數字。');
+        return;
+      }
+      
+      const maxStr = document.getElementById('form-max').value;
+      const maxPoints = maxStr === '' ? null : parseFloat(maxStr);
+      const earnedStr = document.getElementById('form-earned').value;
+      const earnedPoints = earnedStr === '' ? null : parseFloat(earnedStr);
+
+      if (earnedPoints !== null && earnedPoints < 0) {
+        alert('得分不可小於 0。');
+        return;
+      }
+      if (earnedPoints !== null && maxPoints !== null && earnedPoints > maxPoints) {
+        alert('得分不可大於滿分，請檢查後再儲存。');
+        return;
+      }
+
+      const res = await fetch('/api/assessment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ 
+          id: id || undefined, 
+          courseId: parseInt(courseId), 
+          name, 
+          assessmentGroup, 
+          weightPercent, 
+          maxPoints, 
+          earnedPoints 
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || '儲存失敗，請稍後再試。');
+        return;
+      }
+      
+      closeModal();
+      fetchData();
+    });
+
+    async function deleteAssessment(id) {
+      if (!confirm('確定要刪除這筆評核紀錄嗎？刪除後無法復原。')) return;
+      const res = await fetch(`/api/assessment/${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) alert(data.error || '刪除失敗');
+      fetchData();
+    }
+
+    async function updateTarget(courseId, targetGrade) {
+      const res = await fetch(`/api/course/${courseId}/target`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ targetGrade })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) alert(data.error || '更新失敗');
+      fetchData();
+    }
+
+    async function editCredits(courseId, currentCredits) {
+      const newCreditsStr = prompt('請輸入新的學分數 (可輸入小數):', currentCredits);
+      if (newCreditsStr === null) return;
+      const newCredits = parseFloat(newCreditsStr);
+      
+      if (isNaN(newCredits) || newCredits < 0) {
+        alert('請輸入有效的非負數！');
+        return;
+      }
+
+      const res = await fetch(`/api/course/${courseId}/credits`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ credits: newCredits })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) alert(data.error || '更新失敗');
+      fetchData();
+    }
+
+    async function confirmCourse(courseId) {
+      const course = state.courses.find(c => c.id === courseId);
+      if (!course) return;
+      const markStr = prompt('請輸入校方公布的科目最終分數 (0-100)，留空可清除:', course.officialMark ?? '');
+      if (markStr === null) return;
+      const trimmed = markStr.trim();
+      const mark = trimmed === '' ? null : parseFloat(trimmed);
+      if (mark !== null && (isNaN(mark) || mark < 0 || mark > 100)) {
+        alert('請輸入 0 至 100 之間的有效數字。');
+        return;
+      }
+
+      let gpaInclusion = 'include';
+      if (['SDD4005', 'SDD4006M', 'SDD4007', 'LAN3107', 'LAN3108'].includes(course.code)) {
+         if (confirm('此科目是否為 Pass/Fail 不計 GPA 科目？(確定=不計入，取消=計入)')) gpaInclusion = 'exclude';
+      }
+
+      const res = await fetch(`/api/course/${courseId}/confirm`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ officialMark: mark, gpaInclusion })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) alert(data.error || '儲存失敗');
+      fetchData();
+    }
+
+    async function importBackup() {
+      const file = document.getElementById('import-file');
+      if (!file.files.length) return;
+      if (!confirm('匯入會覆蓋目前所有資料，確定要繼續嗎？建議先匯出目前備份。')) {
+        file.value = '';
+        return;
+      }
+      let data;
+      try {
+        data = JSON.parse(await file.files[0].text());
+      } catch {
+        alert('無法解析 JSON 檔案，請確認是正確的備份檔。');
+        file.value = '';
+        return;
+      }
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(result.error || '匯入失敗');
+      } else {
+        alert(`匯入成功：${result.imported.terms} 學期、${result.imported.courses} 科目、${result.imported.assessments} 評核。`);
+      }
+      file.value = '';
+      fetchData();
+    }
+
+    // --- 事件委派：評核編輯 / 刪除（避免 JSON 注入 onclick 的風險） ---
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = Number(btn.dataset.id);
+      const courseId = Number(btn.dataset.courseid);
+      if (action === 'edit-assess') {
+        const a = state.courses.flatMap(c => c.assessments).find(x => x.id === id);
+        if (a) openModal(courseId, a);
+      } else if (action === 'del-assess') {
+        deleteAssessment(id);
+      }
+    });
+
+    fetchData();
+  </script>
+</body>
+</html>

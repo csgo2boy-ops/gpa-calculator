@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GPA Tracker — 純前端、離線可用的香港 VTC/IVE GPA 成績追蹤與試算工具。">
+  <title>GPA Tracker - 本機成績追蹤</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Modal 表單 -->
+  <div id="assessment-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="window.__gpa && window.__gpa.closeModal && window.__gpa.closeModal()"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="modal-title" class="modal-title">新增評核項目</h3>
+        <button class="icon-btn" onclick="window.__gpa && window.__gpa.closeModal && window.__gpa.closeModal()" title="關閉">✕</button>
+      </div>
+      <form id="assessment-form" class="modal-body">
+        <input type="hidden" id="form-id">
+        <input type="hidden" id="form-courseId">
+
+        <div class="field">
+          <label class="label">評核名稱</label>
+          <input type="text" id="form-name" required class="input" placeholder="例如：期末考、小測 1">
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label class="label">組別</label>
+            <select id="form-group" class="input">
+              <option value="CA">CA (平時分)</option>
+              <option value="EA">EA (期末/總評)</option>
+              <option value="作業">作業</option>
+              <option value="專題">專題</option>
+              <option value="考試">考試 (計入EA門檻)</option>
+              <option value="其他">其他 (不計EA門檻)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label">佔比權重 (%)</label>
+            <input type="number" id="form-weight" required min="0" max="100" step="0.1" class="input" placeholder="例如：20">
+          </div>
+        </div>
+
+        <div class="grid-2 score-grid">
+          <div class="field">
+            <label class="label">滿分 <span class="hint">(未知可留空)</span></label>
+            <input type="number" id="form-max" min="1" step="0.1" class="input" placeholder="例如：100">
+          </div>
+          <div class="field">
+            <label class="label">獲得得分 <span class="hint">(未評分留空)</span></label>
+            <input type="number" id="form-earned" min="0" step="0.1" class="input" placeholder="留空">
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <button type="button" class="btn btn-ghost" onclick="window.__gpa && window.__gpa.closeModal && window.__gpa.closeModal()">取消</button>
+          <button type="submit" class="btn btn-primary">儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="container">
+    <header class="header">
+      <div class="header-title-wrap">
+        <h1 class="header-title">GPA Tracker <span class="header-badge">IT114105</span></h1>
+        <p class="header-sub">資料來源：使用者提供之簡報與課程結構照片。未確認之校規將顯示為待確認。</p>
+      </div>
+      <div class="header-actions">
+        <input type="file" id="import-file" accept="application/json,.json" class="hidden">
+        <button id="btn-import" class="btn btn-ghost">⇪ 匯入備份</button>
+        <button id="btn-export" class="btn btn-ghost">⇩ 匯出備份</button>
+        <button id="btn-reset" class="btn btn-ghost btn-reset">↺ 重設資料</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="panel">
+          <h2 class="panel-title">📅 學期總覽</h2>
+          <ul id="term-list" class="term-list"></ul>
+
+          <div class="cgpa-block">
+            <h3 class="cgpa-title">✅ CGPA 狀態</h3>
+            <p class="cgpa-note">排除「GPA 入帳待確認」科目</p>
+            <div id="cgpa-display" class="cgpa-value">--</div>
+            <div id="cgpa-coverage" class="cgpa-coverage"></div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div id="course-container"></div>
+      </main>
+    </div>
+
+    <footer class="footer">
+      資料僅儲存於本機瀏覽器（localStorage），不會上傳至任何伺服器。
+    </footer>
+  </div>
+
+  <script src="seed-data.js"></script>
+  <script src="engine.js"></script>
+  <script src="storage.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
