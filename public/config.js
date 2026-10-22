@@ -13,8 +13,8 @@
  * ===================================================================== */
 window.APP_CONFIG = {
   // 例如：https://abcdefghijklm.supabase.co
-  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
+  SUPABASE_URL: 'https://ycydacgtwufagvkpyubm.supabase.co/rest/v1/',
 
   // 公開金鑰（Anon / Publishable Key），開頭通常為 eyJhbGciOiJIUzI1NiIs...
-  SUPABASE_ANON_KEY: 'YOUR-ANON-PUBLIC-KEY'
+  SUPABASE_ANON_KEY: 'sb_publishable_fRrfagp8Dsyhqmu4rHDRhg_6kp6XtvN'
 };
