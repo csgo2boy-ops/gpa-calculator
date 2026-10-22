@@ -75,8 +75,10 @@ public/ is the deploy root and requires **no build step**.
 Alternatively use Wrangler:
 
 ~~~bash
-npx wrangler pages deploy public
+npx wrangler deploy
 ~~~
+
+> **Windows one-click**：改完檔案後直接雙擊專案根目錄的 `deploy.bat`，它會自動 commit、push 到 GitHub 並部署到 Cloudflare。
 
 ---
 
