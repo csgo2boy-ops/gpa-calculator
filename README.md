@@ -1,8 +1,8 @@
 # GPA Tracker
 
-A **100% client-side, offline-capable** GPA (Grade Point Average) tracker and calculator tailored for Hong Kong **VTC / IVE** programs. Deployed on **Cloudflare Pages**, with optional **Supabase**-backed user accounts and cloud sync.
+A **100% client-side, offline-capable** GPA (Grade Point Average) tracker and calculator that works for **any school or program** — you add your own semesters, courses and assessments. Deployed on **Cloudflare Pages**, with optional **Supabase**-backed user accounts and cloud sync.
 
-> 一款 100% 純前端、可離線運作的香港 VTC / IVE GPA 成績追蹤與試算工具，部署於 Cloudflare Pages，並可選用 Supabase 提供使用者帳號與雲端同步。
+> 一款 100% 純前端、可離線運作的 GPA 成績追蹤與試算工具，課程完全自訂（適用於任何學校／課程），部署於 Cloudflare Pages，並可選用 Supabase 提供帳號（帳號密碼或 Google）與雲端同步。
 
 <p align="center">
   <img alt="Cloudflare Pages" src="https://img.shields.io/badge/Cloudflare%20Pages-F38020?style=for-the-badge&logo=cloudflare&logoColor=white">
@@ -24,6 +24,7 @@ A **100% client-side, offline-capable** GPA (Grade Point Average) tracker and ca
 - **Zero backend server** — no Express, no SQLite; the static frontend talks directly to Supabase (Backend-as-a-Service) or runs fully offline.
 - **Guest mode** — without an account, everything works offline with localStorage persistence.
 - **User accounts & cloud sync** — sign up / sign in via Supabase Auth; grades are stored in your own Supabase project with row-level isolation (RLS).
+- **Fully customizable courses** — add your own semesters, courses (code / title / credits) and assessments; no hardcoded curriculum.
 - **VTC / IVE grading rules** — A/A-/B+/…/F grade → grade point (GP) lookup table.
 - **CA / EA dual threshold** — CA and EA each require 40% to pass, independently flagged.
 - **Real-time target tracking** — shows the required average with **ceiling rounding** (e.g. 67.34% → 67.4%) so you never fall 0.02 short.
@@ -87,7 +88,7 @@ npx wrangler pages deploy public
 2. 進入 **SQL Editor**，貼上專案根目錄的 `supabase_schema.sql` 並執行——它會建立 `semesters` / `courses` / `assessments` 三張資料表，並啟用 Row Level Security（每位使用者只能讀寫自己的資料）。
 3. 到 **Project Settings → API**，複製 **Project URL** 與 **anon public key**。
 4. 開啟 `public/config.js`，填入 `SUPABASE_URL` 與 `SUPABASE_ANON_KEY`。
-5. 到 **Authentication → Providers → Email** 啟用 Email 認證（可關閉「確認 Email」以方便測試）。
+5. 到 **Authentication → Providers → Email** 啟用 Email 認證，並**務必關閉「Confirm email」**（本專案以「合成 Email」實作純帳號密碼登入，若開啟確認信將無法登入）。
 6. （選用，Google 快捷登入）到 **Authentication → Providers → Google**，填入 Google Cloud 的 OAuth Client ID / Secret 並啟用；再到 **Authentication → URL Configuration → Redirect URLs**，加入你的網站網址（例如 `https://<專案>.pages.dev` 與本機 `http://localhost:3000`）。
 
 > ⚠️ 安全提醒：只能使用「公開的」Anon / Publishable Key，**絕對不要**把 Service Role Key 放進前端（它可繞過 RLS，一旦外洩即代表所有使用者資料曝險）。
@@ -104,7 +105,7 @@ gpa-tracker/
 │   ├── index.html             # 頁面結構（含 Navbar 與 Auth Modal）
 │   ├── styles.css             # 自足樣式
 │   ├── config.js              # Supabase URL / Anon Key 設定（佔位）
-│   ├── seed-data.js           # IT114105 課程與評核種子資料
+│   ├── seed-data.js           # 空白種子（不內建任何課程）
 │   ├── engine.js              # 計算引擎（純函式，前後端通用）
 │   ├── storage.js             # localStorage 持久化模組（訪客模式）
 │   ├── app.js                 # UI 渲染與事件處理（雙模整合）
@@ -159,14 +160,16 @@ gpa-tracker/
 
 ## 📝 繁體中文功能說明
 
-- **導覽列帳號區塊**：未登入顯示「登入 / 註冊」；已登入顯示 Email、「雲端同步正常」徽章與「登出」按鈕。
+- **導覽列帳號區塊**：未登入顯示「登入 / 註冊」；已登入顯示使用者名稱、「雲端同步正常」徽章與「登出」按鈕。
+- **兩種登入方式**：帳號 + 密碼（不需 Email）或 Google 帳號。
+- **自行新增資料**：可新增／刪除學期、科目與評核，適合任何課程與學校。
 - **學期總覽**：左側顯示五個學期與各學期學分合計，以及 CGPA 覆蓋率。
 - **科目卡片**：每個科目顯示已鎖定分數、已評分權重、最高可達分數，以及 CA/EA 獨立達標狀態。
 - **目標追蹤**：可切換目標等級（A～D），即時顯示「剩餘評核平均需達 XX%」。
 - **評核管理**：新增 / 編輯 / 刪除評核，內建防呆（得分不可大於滿分、權重需 0–100）。
 - **官方成績**：可輸入校方公布的最終分數，供 CGPA 計算。
 - **訪客同步提示**：登入後若偵測到本地暫存資料，會詢問是否同步至雲端帳號。
-- **備份**：右上角「匯出備份」下載 JSON，「匯入備份」還原，「重設資料」回到預設課程結構。
+- **備份**：右上角「匯出備份」下載 JSON，「匯入備份」還原，「清空資料」刪除全部紀錄。
 
 ---
 
@@ -188,4 +191,4 @@ The test suite asserts:
 
 [MIT](LICENSE)
 
-> 此專案之 IT114105 課程結構由使用者提供，僅供個人學業用途。
+> 本專案不內建任何課程資料，所有成績由使用者自行輸入，僅供個人學業用途。

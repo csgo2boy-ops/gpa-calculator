@@ -471,3 +471,56 @@ body {
 .btn-google:hover { background: var(--surface); }
 .google-icon { flex-shrink: 0; }
 
+/* ---------- 自訂課程：新增按鈕 / 空白狀態 ---------- */
+.btn-block { width: 100%; justify-content: center; margin-bottom: 1rem; }
+
+.term-meta { display: inline-flex; align-items: center; gap: 0.375rem; }
+
+.semester-header .semester-add,
+.semester-header .semester-del {
+  position: relative;
+  z-index: 2;
+  background: #fff;
+}
+.semester-header .semester-add { margin-left: 0.5rem; }
+
+.semester-empty {
+  background: var(--surface);
+  border: 1px dashed var(--border-300);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-400);
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state {
+  background: #fff;
+  border: 1px dashed var(--border-300);
+  border-radius: 1rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+.empty-title { font-size: 1.25rem; font-weight: 700; color: var(--text-800); margin-bottom: 0.5rem; }
+.empty-desc { font-size: 0.875rem; color: var(--text-500); margin-bottom: 1.5rem; }
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-700);
+  cursor: pointer;
+  user-select: none;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+
