@@ -715,6 +715,8 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' || e.keyCode === 27) {
       closeAuthModal(); closeTermModal(); closeCourseModal(); closeModal(); closeHelpModal(); closeBackupModal();
+      var rm = document.getElementById('reconcile-modal');
+      if (rm) { rm.classList.add('hidden'); rm.classList.remove('flex'); }
     }
   });
 
@@ -765,6 +767,45 @@
     });
   }
 
+  // ---------- 舊資料對帳：人工確認（保守預設＝保留本機）----------
+  function reconcileKindLabel(kind) {
+    return kind === 'term' ? '學期' : (kind === 'course' ? '科目' : '評核');
+  }
+  function askReconcile(list) {
+    return new Promise(function (resolve) {
+      var modal = document.getElementById('reconcile-modal');
+      var body = document.getElementById('reconcile-list');
+      if (!modal || !body) { resolve({}); return; }
+      body.innerHTML = (list || []).map(function (x) {
+        return '<label class="reconcile-item">' +
+          '<input type="checkbox" data-rkey="' + escapeHtml(x.key) + '">' +
+          '<span><strong>' + escapeHtml(reconcileKindLabel(x.kind)) + ' #' + x.localId + '</strong> ' +
+          '本機：' + escapeHtml(x.localLabel) + ' ／ 雲端：' + escapeHtml(x.cloudLabel) + '</span></label>';
+      }).join('');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      function handler(e) {
+        var b = e.target.closest('[data-reconcile]');
+        if (!b) return;
+        var decisions = {};
+        if (b.getAttribute('data-reconcile') === 'apply') {
+          var boxes = body.querySelectorAll('input[data-rkey]');
+          boxes.forEach(function (box) { decisions[box.getAttribute('data-rkey')] = box.checked ? 'cloud' : 'local'; });
+        } else {
+          (list || []).forEach(function (x) { decisions[x.key] = 'local'; });
+        }
+        cleanup();
+        resolve(decisions);
+      }
+      function cleanup() {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.removeEventListener('click', handler);
+      }
+      modal.addEventListener('click', handler);
+    });
+  }
+
   // ---------- 認證狀態監聽 ----------
   Auth.onAuthChange(async function (user, event) {
     renderNavbar();
@@ -802,7 +843,12 @@
 
         // 舊資料遷移：以相同 local_id 對帳雲端 uid，避免第一次合併產生重複
         if (cloudHas && lm.uidsBackfilled) {
-          localState = Db.reconcileLocalUids(localState, cloudState);
+          var rec = Db.reconcileLocalUids(localState, cloudState);
+          if (rec.ambiguous && rec.ambiguous.length > 0) {
+            var decisions = await askReconcile(rec.ambiguous);
+            rec = Db.reconcileLocalUids(localState, cloudState, decisions);
+          }
+          localState = rec.state;
           try { Storage.save(localState); } catch (e4) { /* ignore */ }
         }
 

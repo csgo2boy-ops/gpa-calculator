@@ -250,29 +250,61 @@
     };
   }
 
-  // 舊資料遷移對帳：以相同 local_id 採用雲端既有 uid，避免第一次合併產生重複
-  function reconcileLocalUids(localState, cloudState) {
-    function byLocalId(arr) { var m = {}; (arr || []).forEach(function (x) { if (x && x.id != null) m[x.id] = x; }); return m; }
-    var ct = byLocalId(cloudState.terms), cc = byLocalId(cloudState.courses), ca = byLocalId(cloudState.assessments);
-    var terms = (localState.terms || []).map(function (t) {
-      var m = ct[t.id];
-      return Object.assign({}, t, { uid: (m && isUuid(m.uid)) ? m.uid : t.uid });
-    });
-    var courses = (localState.courses || []).map(function (x) {
-      var m = cc[x.id];
-      return Object.assign({}, x, {
-        uid: (m && isUuid(m.uid)) ? m.uid : x.uid,
-        termUid: (m && isUuid(m.termUid)) ? m.termUid : x.termUid
+  // 舊資料遷移對帳（Batch 1.2 修正：保守策略，不再只憑 local_id）
+  //
+  // 規則：
+  //  - 只有 local_id 相符「且」內容簽章相同，才自動採用雲端 uid（高信心）。
+  //  - 內容不同 → 列入 ambiguous，預設「不採用」（視為不同資料，避免錯誤覆蓋）。
+  //  - decisions 可對單筆人工指定：{ 'course:3': 'cloud' | 'local' }。
+  //  - 回傳 { state, adopted, ambiguous }。
+  function normalizeText(v) {
+    return String(v == null ? '' : v).trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+  function sigTerm(t) { return normalizeText(t.name); }
+  function sigCourse(c) { return normalizeText(c.code) + '|' + normalizeText(c.title) + '|' + String(c.credits); }
+  function sigAssessment(a) { return normalizeText(a.name) + '|' + normalizeText(a.assessmentGroup) + '|' + String(a.weightPercent); }
+
+  function reconcileLocalUids(localState, cloudState, decisions) {
+    var dec = decisions || {};
+    var adopted = 0;
+    var ambiguous = [];
+
+    function build(kind, arrLocal, arrCloud, sigFn) {
+      var cloudById = {};
+      (arrCloud || []).forEach(function (c) { if (c && c.id != null) cloudById[c.id] = c; });
+      return (arrLocal || []).map(function (l) {
+        var c = cloudById[l.id];
+        if (!c || !isUuid(c.uid)) return Object.assign({}, l); // 雲端沒有 → 保留本機
+        var key = kind + ':' + l.id;
+        var choice = dec[key];
+        if (choice === 'cloud') { adopted++; return Object.assign({}, l, { uid: c.uid }); }
+        if (choice === 'local') return Object.assign({}, l);
+        if (sigFn(l) === sigFn(c)) { adopted++; return Object.assign({}, l, { uid: c.uid }); }
+        ambiguous.push({
+          key: key, kind: kind, localId: l.id,
+          localLabel: sigFn(l), cloudLabel: sigFn(c)
+        });
+        return Object.assign({}, l); // 保守：不採用
       });
-    });
-    var assessments = (localState.assessments || []).map(function (x) {
-      var m = ca[x.id];
-      return Object.assign({}, x, {
-        uid: (m && isUuid(m.uid)) ? m.uid : x.uid,
-        courseUid: (m && isUuid(m.courseUid)) ? m.courseUid : x.courseUid
-      });
-    });
-    return ensure({ version: 1, terms: terms, courses: courses, assessments: assessments });
+    }
+
+    var terms = build('term', localState.terms, cloudState.terms, sigTerm);
+    var courses = build('course', localState.courses, cloudState.courses, sigCourse);
+    var assessments = build('assessment', localState.assessments, cloudState.assessments, sigAssessment);
+
+    // 對帳後重新推導關聯 uid（避免指向舊 uid）
+    var termUidById = {};
+    terms.forEach(function (t) { termUidById[t.id] = t.uid; });
+    courses.forEach(function (c) { if (termUidById[c.termId]) c.termUid = termUidById[c.termId]; });
+    var courseUidById = {};
+    courses.forEach(function (c) { courseUidById[c.id] = c.uid; });
+    assessments.forEach(function (a) { if (courseUidById[a.courseId]) a.courseUid = courseUidById[a.courseId]; });
+
+    return {
+      state: ensure({ version: 1, terms: terms, courses: courses, assessments: assessments }),
+      adopted: adopted,
+      ambiguous: ambiguous
+    };
   }
 
   // ---------- 統一介面 ----------

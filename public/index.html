@@ -305,6 +305,24 @@
     </div>
   </div>
 
+  <!-- 舊資料對帳 Modal（保守預設＝保留本機，避免錯誤覆蓋）-->
+  <div id="reconcile-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card modal-wide">
+      <div class="modal-head">
+        <h3 class="modal-title">舊資料對帳</h3>
+      </div>
+      <div class="modal-body">
+        <p class="sync-desc">以下本機資料與雲端有相同本機編號，但內容不同。為避免錯誤覆蓋，系統預設把它們視為<b>不同資料</b>（不合併）。如確定是同一筆，請勾選「與雲端同一筆」。</p>
+        <div id="reconcile-list"></div>
+        <div class="sync-options">
+          <button type="button" class="btn btn-ghost" data-reconcile="none">全部保留本機（安全）</button>
+          <button type="button" class="btn btn-primary" data-reconcile="apply">套用選擇</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="config.js"></script>
