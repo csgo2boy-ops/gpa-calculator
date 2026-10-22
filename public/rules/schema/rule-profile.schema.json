@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpa-tracker.local/schemas/rule-profile.schema.json",
+  "title": "GPA Rule Profile",
+  "type": "object",
+  "required": ["schemaVersion", "identity", "scope", "profile", "itemStatus"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "identity": {
+      "type": "object",
+      "required": ["institutionId", "qualificationLevel", "admissionYear", "regulationVersion"],
+      "properties": {
+        "institutionId": { "type": "string" },
+        "qualificationLevel": { "enum": ["higher-diploma", "associate-degree", "bachelor"] },
+        "admissionYear": { "type": ["integer", "null"] },
+        "regulationVersion": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "scope": { "enum": ["institution", "programme", "subject"] },
+    "scopeRef": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "object", "required": ["programmeId"], "properties": { "programmeId": { "type": "string" } }, "additionalProperties": false },
+        { "type": "object", "required": ["subjectCode"], "properties": { "subjectCode": { "type": "string" } }, "additionalProperties": false }
+      ]
+    },
+    "profile": { "$ref": "#/$defs/profile" },
+    "itemStatus": { "$ref": "#/$defs/itemStatus" },
+    "itemSources": { "type": "object" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "status": { "enum": ["verified", "partial", "unknown", "custom", "deprecated"] },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "gradeScale": { "$ref": "#/$defs/gradeScale" },
+        "gpaRules": { "$ref": "#/$defs/gpaRules" },
+        "repeatRules": { "$ref": "#/$defs/repeatRules" },
+        "scoreToGrade": { "$ref": "#/$defs/scoreToGrade" },
+        "attendancePolicy": { "$ref": "#/$defs/attendancePolicy" }
+      },
+      "additionalProperties": false
+    },
+    "gradeScale": {
+      "type": "object",
+      "required": ["grades"],
+      "properties": {
+        "grades": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["letter", "gp"],
+            "properties": {
+              "letter": { "type": "string" },
+              "gp": { "type": "number" },
+              "minMark": { "type": ["number", "null"] },
+              "maxMark": { "type": ["number", "null"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "passLetter": { "type": ["string", "null"] },
+        "nonCountedLetters": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "gpaRules": {
+      "type": "object",
+      "properties": {
+        "formula": { "enum": ["weighted-points-over-attempted-units", "weighted-points-over-graded-units", "unknown"] },
+        "includeFailedCourses": { "type": ["boolean", "null"] },
+        "includeExcludedCourses": { "type": ["boolean", "null"] },
+        "rounding": {
+          "type": "object",
+          "properties": { "method": { "enum": ["half-up", "truncate", "none"] }, "dp": { "type": "integer", "minimum": 0, "maximum": 4 } }
+        }
+      },
+      "additionalProperties": false
+    },
+    "repeatRules": {
+      "type": "object",
+      "properties": {
+        "repeatFailedRequired": { "type": ["boolean", "null"] },
+        "allowSupplementaryExam": { "type": ["boolean", "null"] },
+        "repeatPassedOnlyIfRequired": { "type": ["boolean", "null"] },
+        "passedRepeatedUnitsCountOnce": { "type": ["boolean", "null"] },
+        "gradeReplacementPolicy": { "enum": ["replace", "keep-best", "keep-all", "unknown"] }
+      },
+      "additionalProperties": false
+    },
+    "scoreToGrade": {
+      "type": "object",
+      "properties": {
+        "available": { "type": ["boolean", "null"] },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "attendancePolicy": {
+      "type": "object",
+      "properties": {
+        "countingUnit": { "enum": ["session", "minute", "hybrid", "unknown"] },
+        "sessionMinutes": { "type": ["number", "null"] },
+        "lateAfterMinutes": { "type": ["number", "null"] },
+        "lateWeight": { "type": ["number", "null"] },
+        "lateCountsAsAbsent": { "type": ["boolean", "null"] },
+        "earlyLeaveWeight": { "type": ["number", "null"] },
+        "leaveCountsAsAbsent": { "type": ["boolean", "null"] },
+        "cancelledExcluded": { "type": ["boolean", "null"] },
+        "attendanceThresholdPercent": { "type": ["number", "null"] },
+        "absenceQuotaSessions": { "type": ["number", "null"] },
+        "absenceQuotaMinutes": { "type": ["number", "null"] },
+        "classTypes": { "type": "object" },
+        "riskTiers": { "type": ["array", "null"] },
+        "futureTotalSessionsUnknown": { "type": ["boolean", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "itemStatus": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "gradeScale": { "$ref": "#/$defs/status" },
+        "gpaRules": { "$ref": "#/$defs/status" },
+        "repeatRules": { "$ref": "#/$defs/status" },
+        "scoreToGrade": { "$ref": "#/$defs/status" },
+        "attendancePolicy": { "$ref": "#/$defs/status" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

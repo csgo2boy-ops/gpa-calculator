@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "institutionId": "cuhk",
+    "qualificationLevel": "bachelor",
+    "admissionYear": 2026,
+    "regulationVersion": "2026-27"
+  },
+  "scope": "institution",
+  "scopeRef": null,
+  "profile": {
+    "gradeScale": {
+      "grades": [
+        {
+          "letter": "A",
+          "gp": 4,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "A-",
+          "gp": 3.7,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "B+",
+          "gp": 3.3,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "B",
+          "gp": 3,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "B-",
+          "gp": 2.7,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "C+",
+          "gp": 2.3,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "C",
+          "gp": 2,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "C-",
+          "gp": 1.7,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "D+",
+          "gp": 1.3,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "D",
+          "gp": 1,
+          "minMark": null,
+          "maxMark": null
+        },
+        {
+          "letter": "F",
+          "gp": 0,
+          "minMark": null,
+          "maxMark": null
+        }
+      ],
+      "passLetter": "D",
+      "nonCountedLetters": [
+        "DI",
+        "PA",
+        "FA",
+        "P",
+        "U"
+      ]
+    },
+    "gpaRules": {
+      "formula": "weighted-points-over-attempted-units",
+      "includeFailedCourses": true,
+      "includeExcludedCourses": false,
+      "rounding": {
+        "method": "half-up",
+        "dp": 2
+      }
+    },
+    "repeatRules": {
+      "repeatFailedRequired": true,
+      "allowSupplementaryExam": true,
+      "repeatPassedOnlyIfRequired": true,
+      "passedRepeatedUnitsCountOnce": true,
+      "gradeReplacementPolicy": "unknown"
+    },
+    "scoreToGrade": {
+      "available": false,
+      "note": "General Regulations do not specify raw-score-to-grade conversion"
+    },
+    "attendancePolicy": {
+      "countingUnit": "unknown",
+      "sessionMinutes": null,
+      "lateAfterMinutes": null,
+      "lateWeight": null,
+      "lateCountsAsAbsent": null,
+      "earlyLeaveWeight": null,
+      "leaveCountsAsAbsent": null,
+      "cancelledExcluded": null,
+      "attendanceThresholdPercent": null,
+      "absenceQuotaSessions": null,
+      "absenceQuotaMinutes": null,
+      "classTypes": {},
+      "riskTiers": null,
+      "futureTotalSessionsUnknown": null
+    }
+  },
+  "itemStatus": {
+    "gradeScale": "verified",
+    "gpaRules": "verified",
+    "repeatRules": "partial",
+    "scoreToGrade": "unknown",
+    "attendancePolicy": "partial"
+  },
+  "itemSources": {
+    "gradeScale": [
+      {
+        "url": "https://rgsntl.rgs.cuhk.edu.hk/aqs_prd_applx/public/handbook/view_document.aspx?id=1765&lang=en&seq=1",
+        "title": "CUHK General Regulations 2026-27 - Reg 9.2",
+        "accessedAt": "2026-10-22",
+        "excerpt": "A 4.0; A- 3.7; B+ 3.3; B 3.0; B- 2.7; C+ 2.3; C 2.0; C- 1.7; D+ 1.3; D 1.0; F 0.0. DI/PA/FA/P/U not counted in GPA."
+      }
+    ],
+    "gpaRules": [
+      {
+        "url": "https://rgsntl.rgs.cuhk.edu.hk/aqs_prd_applx/public/handbook/view_document.aspx?id=1765&lang=en&seq=1",
+        "title": "CUHK General Regulations 2026-27 - Reg 9.2",
+        "accessedAt": "2026-10-22",
+        "excerpt": "GPA = total weighted converted points / total number of units attempted inclusive of courses failed; weighted converted points = converted points x units."
+      }
+    ],
+    "repeatRules": [
+      {
+        "url": "https://rgsntl.rgs.cuhk.edu.hk/aqs_prd_applx/public/handbook/view_document.aspx?id=1765&lang=en&seq=1",
+        "title": "CUHK General Regulations 2026-27 - Reg 5.6/5.7/9.3",
+        "accessedAt": "2026-10-22",
+        "excerpt": "Failed required course must be retaken or substituted; supplementary exam may apply. A passed course shall not be repeated except as required. Units of a passed-but-repeated course count once."
+      }
+    ],
+    "attendancePolicy": [
+      {
+        "url": "https://rgsntl.rgs.cuhk.edu.hk/aqs_prd_applx/public/handbook/view_document.aspx?id=1765&lang=en&seq=1",
+        "title": "CUHK General Regulations 2026-27 - Reg 8",
+        "accessedAt": "2026-10-22",
+        "excerpt": "Reg 8.1-8.5 cover absence, medical certificate, leave of absence; no numeric attendance threshold specified at University level."
+      }
+    ]
+  }
+}
