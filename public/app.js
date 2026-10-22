@@ -34,6 +34,29 @@
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
   }
+  function toast(message, type) {
+    var container = document.getElementById('toast-container');
+    if (!container) return;
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + (type || 'error');
+    el.textContent = message;
+    container.appendChild(el);
+    var raf = (typeof window !== 'undefined' && window.requestAnimationFrame) || function (fn) { setTimeout(fn, 10); };
+    raf(function () { el.classList.add('toast-show'); });
+    setTimeout(function () {
+      el.classList.remove('toast-show');
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+    }, 3200);
+  }
+
+  function currentScroll() { try { return (typeof window !== 'undefined' && window.scrollY) || 0; } catch (e) { return 0; } }
+  function restoreScroll(y) { try { if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, y); } catch (e) {} }
+  function focusAfter(id) {
+    setTimeout(function () {
+      try { var el = document.getElementById(id); if (el) { el.focus(); if (el.select) el.select(); } } catch (e) {}
+    }, 60);
+  }
+
   function assessmentsOf(courseId) {
     return state.assessments.filter(function (a) { return a.courseId === courseId; });
   }
@@ -45,8 +68,10 @@
     if (!el) return;
     if (status === 'ok') { el.className = 'badge badge-emerald'; el.textContent = '☁ 雲端同步正常'; }
     else if (status === 'error') { el.className = 'badge badge-danger'; el.textContent = '⚠ 同步失敗'; }
+    else if (status === 'syncing') { el.className = 'badge badge-pending'; el.textContent = '⏳ 同步中…'; }
   }
   async function persist() {
+    if (Auth.isLoggedIn()) setSyncStatus('syncing');
     try {
       await Db.persist(state);
       if (Auth.isLoggedIn()) setSyncStatus('ok');
@@ -99,6 +124,7 @@
 
   function render() {
     if (!state) return;
+    var y = currentScroll();
     var terms = state.terms.slice().sort(function (a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0); });
 
     var termList = document.getElementById('term-list');
@@ -114,10 +140,23 @@
       '</li>';
     }).join('');
 
+    var summaryEl = document.getElementById('summary');
+    if (summaryEl) {
+      if (state.courses.length > 0) {
+        var totalAllCredits = state.courses.reduce(function (s, c) { return s + (Number(c.credits) || 0); }, 0);
+        summaryEl.textContent = '共 ' + state.courses.length + ' 個科目 · ' + totalAllCredits + ' 學分';
+        summaryEl.classList.remove('hidden');
+      } else {
+        summaryEl.textContent = '';
+        summaryEl.classList.add('hidden');
+      }
+    }
+
     var container = document.getElementById('course-container');
     if (terms.length === 0) {
       container.innerHTML = renderEmptyState();
       calculateCGPA();
+      restoreScroll(y);
       return;
     }
 
@@ -231,6 +270,7 @@
 
     container.innerHTML = html;
     calculateCGPA();
+    restoreScroll(y);
   }
 
   function calculateCGPA() {
@@ -256,6 +296,7 @@
     document.getElementById('term-form').reset();
     document.getElementById('term-modal').classList.remove('hidden');
     document.getElementById('term-modal').classList.add('flex');
+    focusAfter('term-name');
   }
   function closeTermModal() {
     document.getElementById('term-modal').classList.add('hidden');
@@ -264,7 +305,7 @@
   document.getElementById('term-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     var name = document.getElementById('term-name').value.trim();
-    if (!name) { alert('請輸入學期名稱。'); return; }
+    if (!name) { toast('請輸入學期名稱。'); return; }
     var maxOrder = state.terms.reduce(function (m, t) { return Math.max(m, t.sortOrder || 0); }, 0);
     state.terms.push({ id: Storage.nextId(state.terms), name: name, sortOrder: maxOrder + 1 });
     closeTermModal();
@@ -278,6 +319,7 @@
     document.getElementById('course-include').checked = true;
     document.getElementById('course-modal').classList.remove('hidden');
     document.getElementById('course-modal').classList.add('flex');
+    focusAfter('course-title');
   }
   function closeCourseModal() {
     document.getElementById('course-modal').classList.add('hidden');
@@ -291,8 +333,8 @@
     var creditsStr = document.getElementById('course-credits').value;
     var credits = creditsStr === '' ? 0 : parseFloat(creditsStr);
     var include = document.getElementById('course-include').checked;
-    if (!title) { alert('請輸入科目名稱。'); return; }
-    if (isNaN(credits) || credits < 0) { alert('學分必須是非負數。'); return; }
+    if (!title) { toast('請輸入科目名稱。'); return; }
+    if (isNaN(credits) || credits < 0) { toast('學分必須是非負數。'); return; }
     state.courses.push({
       id: Storage.nextId(state.courses),
       termId: termId,
@@ -332,6 +374,7 @@
       document.getElementById('form-courseId').value = courseId;
       document.getElementById('form-max').value = '100';
     }
+    focusAfter('form-name');
   }
   function closeModal() {
     modal.classList.add('hidden');
@@ -346,13 +389,13 @@
     var assessmentGroup = document.getElementById('form-group').value;
     var weightPercent = parseFloat(document.getElementById('form-weight').value);
 
-    if (isNaN(weightPercent) || weightPercent < 0 || weightPercent > 100) { alert('權重必須是 0 至 100 之間的數字。'); return; }
+    if (isNaN(weightPercent) || weightPercent < 0 || weightPercent > 100) { toast('權重必須是 0 至 100 之間的數字。'); return; }
     var maxStr = document.getElementById('form-max').value;
     var maxPoints = maxStr === '' ? null : parseFloat(maxStr);
     var earnedStr = document.getElementById('form-earned').value;
     var earnedPoints = earnedStr === '' ? null : parseFloat(earnedStr);
-    if (earnedPoints !== null && earnedPoints < 0) { alert('得分不可小於 0。'); return; }
-    if (earnedPoints !== null && maxPoints !== null && earnedPoints > maxPoints) { alert('得分不可大於滿分，請檢查後再儲存。'); return; }
+    if (earnedPoints !== null && earnedPoints < 0) { toast('得分不可小於 0。'); return; }
+    if (earnedPoints !== null && maxPoints !== null && earnedPoints > maxPoints) { toast('得分不可大於滿分，請檢查後再儲存。'); return; }
 
     if (id) {
       var existing = state.assessments.find(function (a) { return a.id === parseInt(id, 10); });
@@ -404,7 +447,7 @@
     var newCreditsStr = prompt('請輸入新的學分數 (可輸入小數):', currentCredits);
     if (newCreditsStr === null) return;
     var newCredits = parseFloat(newCreditsStr);
-    if (isNaN(newCredits) || newCredits < 0) { alert('請輸入有效的非負數！'); return; }
+    if (isNaN(newCredits) || newCredits < 0) { toast('請輸入有效的非負數！'); return; }
     var c = state.courses.find(function (x) { return x.id === courseId; });
     if (c) { c.credits = newCredits; await commit(); }
   }
@@ -415,7 +458,7 @@
     if (markStr === null) return;
     var trimmed = markStr.trim();
     var mark = trimmed === '' ? null : parseFloat(trimmed);
-    if (mark !== null && (isNaN(mark) || mark < 0 || mark > 100)) { alert('請輸入 0 至 100 之間的有效數字。'); return; }
+    if (mark !== null && (isNaN(mark) || mark < 0 || mark > 100)) { toast('請輸入 0 至 100 之間的有效數字。'); return; }
     course.officialMark = mark;
     course.officialGP = mark === null ? null : Engine.getGrade(mark).gp;
     await commit();
@@ -424,7 +467,7 @@
   // ---------- 載入 IT114105 範本 ----------
   async function loadTemplate() {
     var tpl = Storage.template();
-    if (!tpl || !tpl.terms || tpl.terms.length === 0) { alert('沒有可用的範本課程。'); return; }
+    if (!tpl || !tpl.terms || tpl.terms.length === 0) { toast('沒有可用的範本課程。'); return; }
     if (state.terms.length > 0) {
       if (!confirm('目前已有資料，載入範本會覆蓋目前內容，確定嗎？')) return;
     }
@@ -454,10 +497,10 @@
     reader.onload = async function () {
       var data;
       try { data = JSON.parse(reader.result); }
-      catch (err) { alert('無法解析 JSON 檔案，請確認是正確的備份檔。'); fileInput.value = ''; return; }
+      catch (err) { toast('無法解析 JSON 檔案，請確認是正確的備份檔。'); fileInput.value = ''; return; }
       var result = Storage.importJson(data);
-      if (!result.ok) { alert(result.error); }
-      else { state = result.state; await commit(); alert('匯入成功：' + state.terms.length + ' 學期、' + state.courses.length + ' 科目、' + state.assessments.length + ' 評核。'); }
+      if (!result.ok) { toast(result.error); }
+      else { state = result.state; await commit(); toast('匯入成功：' + state.terms.length + ' 學期、' + state.courses.length + ' 科目、' + state.assessments.length + ' 評核。', 'success'); }
       fileInput.value = '';
     };
     reader.readAsText(file, 'utf-8');
@@ -478,6 +521,7 @@
     document.getElementById('auth-form').reset();
     document.getElementById('auth-modal').classList.remove('hidden');
     document.getElementById('auth-modal').classList.add('flex');
+    focusAfter('auth-username');
   }
   function closeAuthModal() {
     document.getElementById('auth-modal').classList.add('hidden');
@@ -538,6 +582,12 @@
     } else if (action === 'del-assess') { deleteAssessment(id); }
     else if (action === 'del-term') { deleteTerm(id); }
     else if (action === 'del-course') { deleteCourse(id); }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' || e.keyCode === 27) {
+      closeAuthModal(); closeTermModal(); closeCourseModal(); closeModal();
+    }
   });
 
   document.getElementById('btn-export').addEventListener('click', exportBackup);

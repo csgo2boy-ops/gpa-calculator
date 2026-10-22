@@ -187,6 +187,7 @@
           <h2 class="panel-title">📅 學期總覽</h2>
           <button class="btn btn-primary btn-block" onclick="window.__gpa && window.__gpa.openTermModal && window.__gpa.openTermModal()">＋ 新增學期</button>
           <ul id="term-list" class="term-list"></ul>
+          <div id="summary" class="summary-line hidden"></div>
 
           <div class="cgpa-block">
             <h3 class="cgpa-title">✅ CGPA 狀態</h3>
@@ -206,6 +207,8 @@
       訪客模式資料儲存於本機瀏覽器；登入後資料雲端同步，不會公開給其他使用者。
     </footer>
   </div>
+
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="config.js"></script>
   <script src="engine.js"></script>
