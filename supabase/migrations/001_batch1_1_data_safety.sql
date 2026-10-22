@@ -126,7 +126,10 @@ begin
     where user_id = v_uid
     for update;
 
-  if p_expected_revision is not null and p_expected_revision <> v_rev then
+  if p_expected_revision is null then
+    raise exception 'p_expected_revision is required';
+  end if;
+  if p_expected_revision <> v_rev then
     return jsonb_build_object('ok', false, 'conflict', true, 'current_revision', v_rev);
   end if;
 
@@ -182,3 +185,53 @@ begin
   return jsonb_build_object('ok', true, 'revision', v_rev);
 end;
 $$;
+
+
+-- =====================================================================
+-- Batch 1.2 追加：原子讀取快照 + state 回填 + 權限
+-- =====================================================================
+
+-- 原子讀取：單一 SQL 語句，回傳一致快照與 revision（避免讀取期間被其他裝置更新）
+create or replace function public.gpa_read_snapshot()
+returns jsonb
+language plpgsql
+security invoker
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_result jsonb;
+begin
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select jsonb_build_object(
+    'has_state', exists(select 1 from public.gpa_user_state where user_id = v_uid),
+    'revision', coalesce((select revision from public.gpa_user_state where user_id = v_uid), 0),
+    'semesters', coalesce((select jsonb_agg(to_jsonb(s)) from public.semesters s where s.user_id = v_uid), '[]'::jsonb),
+    'courses', coalesce((select jsonb_agg(to_jsonb(c)) from public.courses c where c.user_id = v_uid), '[]'::jsonb),
+    'assessments', coalesce((select jsonb_agg(to_jsonb(a)) from public.assessments a where a.user_id = v_uid), '[]'::jsonb)
+  ) into v_result;
+
+  return v_result;
+end;
+$$;
+
+-- 為「已有資料但尚無 state 列」的舊帳號回填 revision（避免被視為未知版本）
+insert into public.gpa_user_state (user_id, revision)
+select t.u, 1
+from (
+  select distinct user_id as u from public.semesters  where user_id is not null
+  union
+  select distinct user_id      from public.courses    where user_id is not null
+  union
+  select distinct user_id      from public.assessments where user_id is not null
+) t
+on conflict (user_id) do nothing;
+
+-- 權限：只允許已登入使用者呼叫，撤銷 anon / PUBLIC
+revoke execute on function public.gpa_read_snapshot() from public;
+revoke execute on function public.gpa_replace_snapshot(jsonb, jsonb, jsonb, bigint) from public;
+grant execute on function public.gpa_read_snapshot() to authenticated;
+grant execute on function public.gpa_replace_snapshot(jsonb, jsonb, jsonb, bigint) to authenticated;
+

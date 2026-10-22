@@ -22,6 +22,8 @@
 
   var GRADES = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D'];
   var state = null;
+  var lastRevision = null;
+  var revisionKnown = true;
   var authTab = 'login';
 
   // ---------- 工具 ----------
@@ -82,18 +84,43 @@
   async function handleSyncError(e) {
     if (!e) return;
     if (e.code === 'REVISION_CONFLICT') {
-      var reload = confirm('雲端資料已被其他裝置更新（版本衝突）。\n\n按「確定」= 重新載入雲端最新資料；\n按「取消」= 用本機資料覆蓋雲端。');
+      var meta = null;
+      try { meta = await Db.loadStateWithMeta(); } catch (e2) { meta = null; }
+      var info = meta
+        ? ('雲端目前有 ' + meta.state.terms.length + ' 學期 / ' + meta.state.courses.length + ' 科目 / ' + meta.state.assessments.length + ' 評核')
+        : '無法讀取雲端最新狀態';
+      var reload = confirm('偵測到雲端已被其他裝置更新（版本衝突）。\n\n' + info + '。\n\n按「確定」= 重新載入雲端最新資料（捨棄本機未同步變更）；\n按「取消」= 用本機資料覆蓋雲端。');
       if (reload) {
-        try { state = await Db.loadState(); render(); setSyncStatus('ok'); toast('已重新載入雲端最新資料。', 'success'); }
-        catch (e2) { toast('重新載入失敗：' + (e2.message || e2), 'error'); }
+        if (!meta) { toast('重新載入失敗，請稍後再試。', 'error'); return; }
+        state = meta.state; lastRevision = meta.revision; revisionKnown = meta.revisionKnown;
+        render(); if (Auth.isLoggedIn()) setSyncStatus('ok');
+        toast('已重新載入雲端最新資料。', 'success');
       } else {
-        try { await Db.persist(state, { expectedRevision: e.currentRevision }); setSyncStatus('ok'); toast('已用本機資料覆蓋雲端。', 'success'); }
-        catch (e2) { toast('覆蓋失敗：' + (e2.message || e2), 'error'); }
+        var freshRev = meta ? meta.revision : null;
+        if (freshRev == null) { toast('無法確認雲端版本，已停止覆蓋以避免資料遺失。', 'error'); return; }
+        if (!confirm('確定要用本機資料覆蓋雲端嗎？\n\n' + info + '\n\n此操作會覆蓋上述雲端資料，且無法復原。')) return;
+        try {
+          var res2 = await Db.persist(state, { expectedRevision: freshRev });
+          lastRevision = res2.revision; revisionKnown = true;
+          if (Auth.isLoggedIn()) setSyncStatus('ok');
+          toast('已用本機資料覆蓋雲端。', 'success');
+        } catch (e3) {
+          if (e3.code === 'REVISION_CONFLICT') toast('覆蓋時又被其他裝置更新，請重新載入後再試。', 'error');
+          else toast('覆蓋失敗：' + (e3.message || e3), 'error');
+        }
       }
       return;
     }
+    if (e.code === 'REVISION_UNKNOWN') {
+      toast('無法確認雲端版本（可能有資料但缺少 revision），已停止同步以避免覆蓋。請先執行 Batch 1.2 migration。', 'error');
+      return;
+    }
+    if (e.code === 'RPC_INVALID_RESPONSE') {
+      toast('雲端回應異常（缺少 ok 或 revision），已視為同步失敗。', 'error');
+      return;
+    }
     if (e.code === 'MIGRATION_REQUIRED') {
-      toast('雲端尚未套用 Batch 1.1 migration，請先執行 supabase/migrations/001_batch1_1_data_safety.sql', 'error');
+      toast('雲端尚未套用 Batch 1.2 migration，請先執行 supabase/migrations/001_batch1_1_data_safety.sql', 'error');
       return;
     }
     toast('同步失敗：' + (e.message || e), 'error');
@@ -102,7 +129,8 @@
   async function persist() {
     if (Auth.isLoggedIn()) setSyncStatus('syncing');
     try {
-      await Db.persist(state);
+      var res = await Db.persist(state, { expectedRevision: lastRevision });
+      if (res && res.revision != null) { lastRevision = res.revision; revisionKnown = true; }
       if (Auth.isLoggedIn()) setSyncStatus('ok');
     } catch (e) {
       console.error(e);
@@ -220,6 +248,10 @@
         var targetHtml = '';
         if (s.targetStatus === 'locked') {
           targetHtml = '<div class="target-ok">🎉 已達標！</div>';
+        } else if (s.targetStatus === 'locked-pending') {
+          targetHtml = '<div class="target-warn">⏳ 分數已達目標，但 CA/EA 仍有未評分項目，尚未確認達標</div>';
+        } else if (s.targetStatus === 'threshold-failed') {
+          targetHtml = '<div class="target-bad">⚠️ 分數達標，但 CA/EA 未達 40% 及格門檻，不符合及格</div>';
         } else if (s.targetStatus === 'impossible') {
           targetHtml = '<div class="target-bad">⚠️ 目標已無法達成（最高可達 ' + s.maxFinal.toFixed(1) + ' 分）</div>';
         } else if (s.targetStatus === 'failed') {
@@ -738,36 +770,77 @@
     renderNavbar();
     if (event === 'SIGNED_IN') {
       try {
+        var lm = (Storage.getLoadMeta ? Storage.getLoadMeta() : { persistOk: true, uidsBackfilled: false });
+
+        var cloudMeta = null;
+        try { cloudMeta = await Db.loadStateWithMeta(); } catch (e2) { console.error(e2); }
+        if (!cloudMeta) {
+          setSyncStatus('error');
+          toast('無法讀取雲端資料，已停止同步。', 'error');
+          return;
+        }
+
+        // UID 遷移未能持久化 → 禁止雲端同步（避免重複資料）
+        if (lm.persistOk === false) {
+          state = cloudMeta.state; lastRevision = cloudMeta.revision; revisionKnown = cloudMeta.revisionKnown;
+          render(); setSyncStatus('error');
+          toast('本機 UID 遷移未能持久化，已停止雲端同步以避免重複資料。請清理本機儲存後再試。', 'error');
+          return;
+        }
+        // Revision 未知（有資料但缺 state）→ 禁止覆蓋
+        if (cloudMeta.revisionKnown === false) {
+          state = cloudMeta.state; lastRevision = null; revisionKnown = false;
+          render(); setSyncStatus('error');
+          toast('雲端資料版本狀態不一致（有資料但缺少 revision），已停止同步。請先執行 Batch 1.2 migration。', 'error');
+          return;
+        }
+
         var localHas = Db.hasLocalData();
-        var cloudState = null;
-        try { cloudState = await Db.loadState(); } catch (e2) { console.error(e2); }
-        var cloudHas = !!(cloudState && cloudState.courses && cloudState.courses.length > 0);
+        var cloudState = cloudMeta.state;
+        var cloudHas = !!(cloudState && ((cloudState.courses && cloudState.courses.length) || (cloudState.terms && cloudState.terms.length)));
+        var localState = Db.readLocalState();
+
+        // 舊資料遷移：以相同 local_id 對帳雲端 uid，避免第一次合併產生重複
+        if (cloudHas && lm.uidsBackfilled) {
+          localState = Db.reconcileLocalUids(localState, cloudState);
+          try { Storage.save(localState); } catch (e4) { /* ignore */ }
+        }
 
         if (localHas && cloudHas) {
           var choice = await askSyncConflict();
           if (choice === 'local') {
-            await Db.syncLocalToCloud(Db.readLocalState());
+            await Db.syncLocalToCloud(localState, { expectedRevision: cloudMeta.revision });
           } else if (choice === 'merge') {
-            var merged = Db.mergeStates(cloudState, Db.readLocalState());
-            await Db.persist(merged);
+            var merged = Db.mergeStates(cloudState, localState);
+            await Db.persist(merged, { expectedRevision: cloudMeta.revision });
             var orph = merged.orphans || { courses: 0, assessments: 0 };
             if (orph.courses || orph.assessments) {
               toast('合併完成；已移除 ' + orph.courses + ' 個孤立科目、' + orph.assessments + ' 個孤立評核（其父項已被刪除）。', 'info');
             }
           }
-          // choice === 'cloud' → 保留雲端，不動作
         } else if (localHas && !cloudHas) {
           if (confirm('雲端尚無資料，是否將本機暫存資料同步到雲端？')) {
-            await Db.syncLocalToCloud(Db.readLocalState());
+            await Db.syncLocalToCloud(localState, { expectedRevision: cloudMeta.revision });
           }
         }
 
-        state = await Db.loadState();
+        var after = await Db.loadStateWithMeta();
+        state = after.state;
+        lastRevision = after.revision;
+        revisionKnown = after.revisionKnown;
         render();
         if (Auth.isLoggedIn()) setSyncStatus('ok');
-      } catch (e) { console.error(e); setSyncStatus('error'); }
+      } catch (e) {
+        console.error(e);
+        setSyncStatus('error');
+        await handleSyncError(e);
+      }
     } else if (event === 'SIGNED_OUT') {
-      try { state = await Db.loadState(); render(); } catch (e) { console.error(e); }
+      try {
+        var m2 = await Db.loadStateWithMeta();
+        state = m2.state; lastRevision = m2.revision; revisionKnown = m2.revisionKnown;
+        render();
+      } catch (e) { console.error(e); }
     }
   });
 
@@ -782,8 +855,15 @@
 
   async function bootstrap() {
     await Auth.ready;
-    try { state = await Db.loadState(); }
-    catch (e) { console.error(e); state = { version: 1, terms: [], courses: [], assessments: [] }; }
+    try {
+      var meta = await Db.loadStateWithMeta();
+      state = meta.state;
+      lastRevision = meta.revision;
+      revisionKnown = meta.revisionKnown;
+    } catch (e) {
+      console.error(e);
+      state = { version: 1, terms: [], courses: [], assessments: [] };
+    }
     renderNavbar();
     render();
     maybeShowHelpOnFirstVisit();

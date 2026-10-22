@@ -13,6 +13,47 @@ test('預設為空白（不再內建任何課程）', () => {
   assert.strictEqual(state.assessments.length, 0);
 });
 
+test('genUid 產生合法 UUID；ensureUids 會替換非法 uid', () => {
+  const u = Storage.genUid();
+  assert.ok(Storage.isUuid(u), 'genUid 必須是合法 UUID: ' + u);
+  const s = Storage.ensureUids({
+    version: 1,
+    terms: [{ id: 1, uid: 'u-not-a-uuid', name: 'S1', sortOrder: 1 }],
+    courses: [],
+    assessments: []
+  });
+  assert.ok(Storage.isUuid(s.terms[0].uid));
+  assert.notStrictEqual(s.terms[0].uid, 'u-not-a-uuid');
+});
+
+test('舊資料補 uid 後會持久化，重新載入 uid 不變', () => {
+  const original = global.localStorage;
+  global.localStorage = {
+    getItem(k) { return this[k] === undefined ? null : this[k]; },
+    setItem(k, v) { this[k] = v; },
+    removeItem(k) { delete this[k]; }
+  };
+  try {
+    global.localStorage.setItem('gpa-tracker-data', JSON.stringify({
+      version: 1,
+      terms: [{ id: 1, name: 'S1', sortOrder: 1 }],
+      courses: [{ id: 1, termId: 1, title: 'C1', credits: 3 }],
+      assessments: []
+    }));
+    const a = Storage.load();
+    const uid1 = a.terms[0].uid;
+    assert.ok(Storage.isUuid(uid1));
+    assert.strictEqual(Storage.getLoadMeta().uidsBackfilled, true);
+    const b = Storage.load();
+    assert.strictEqual(b.terms[0].uid, uid1);
+    const raw = JSON.parse(global.localStorage.getItem('gpa-tracker-data'));
+    assert.strictEqual(raw.terms[0].uid, uid1);
+    assert.strictEqual(Storage.getLoadMeta().uidsBackfilled, false);
+  } finally {
+    if (original === undefined) delete global.localStorage; else global.localStorage = original;
+  }
+});
+
 test('ensureUids：補 uid 並建立關聯 uid（舊資料相容、冪等）', () => {
   const s = Storage.ensureUids({
     version: 1,

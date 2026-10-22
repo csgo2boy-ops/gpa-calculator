@@ -1,10 +1,12 @@
 /* =====================================================================
- * db.js — 雙模資料層（2.0 Batch 1.1）
+ * db.js — 雙模資料層（2.0 Batch 1.2 Final Safety Hardening）
  *
- * - 雲端寫入改走 Supabase RPC「gpa_replace_snapshot」：在單一資料庫交易內
- *   完成快照替換（必要時 migration 需先執行），並以 revision 做樂觀並發控制。
- * - 合併以穩定 uid（非本地數字 id）判斷同一筆資料，合併後重新映射關聯。
- * - 純函式 stateToRows / rowsToState / mergeStates 可在 Node 測試。
+ * 重點：
+ *  - 讀取：gpa_read_snapshot() RPC（單一 SQL 語句、一致快照）＋ revision
+ *  - 寫入：gpa_replace_snapshot() RPC（單一交易），p_expected_revision 必填
+ *  - 回應驗證：只有 data.ok === true 且 revision 合法才算成功
+ *  - Revision 未知（有資料但無 state）時禁止覆蓋
+ *  - 合併以穩定 uid 為身份；reconcileLocalUids() 可在舊資料遷移時對帳
  * ===================================================================== */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(root);
@@ -19,9 +21,16 @@
   var REV_PREFIX = 'gpa-tracker-rev:';
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function hasOwn(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
   function ensure(state) { return Storage.ensureUids(state); }
+  function isUuid(v) { return Storage.isUuid ? Storage.isUuid(v) : (typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v)); }
+  function parseRpc(data) {
+    var d = data;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } }
+    return d;
+  }
 
-  // ---------- revision（樂觀並發控制，per-user）----------
+  // ---------- revision（per-user）----------
   function getKnownRevision(userId) {
     try {
       if (typeof localStorage === 'undefined') return null;
@@ -91,7 +100,7 @@
     return ensure({ version: 1, terms: clone(Seed.terms), courses: clone(Seed.courses), assessments: clone(Seed.assessments) });
   }
 
-  // ---------- 訪客（localStorage）----------
+  // ---------- 訪客 ----------
   function readLocalState() { return Storage.load(); }
 
   function hasLocalData() {
@@ -109,39 +118,66 @@
   // ---------- 雲端 ----------
   function isCloud() { return !!(Auth && Auth.isAvailable() && Auth.isLoggedIn()); }
 
+  // 原子讀取快照 + revision（單一 SQL 語句）
   async function loadCloud(deps) {
     var client = (deps && deps.client) || Auth.getClient();
     var userId = (deps && deps.userId) || (Auth.getUser() && Auth.getUser().id);
-    var res = await Promise.all([
-      client.from('semesters').select('*').eq('user_id', userId),
-      client.from('courses').select('*').eq('user_id', userId),
-      client.from('assessments').select('*').eq('user_id', userId)
-    ]);
-    var sem = res[0], cou = res[1], ass = res[2];
-    if ((sem && sem.error) || (cou && cou.error) || (ass && ass.error)) {
-      throw new Error(((sem && sem.error) || (cou && cou.error) || (ass && ass.error)).message || 'load failed');
+    var res = await client.rpc('gpa_read_snapshot', {});
+    if (res && res.error) {
+      var e0 = new Error(res.error.message || 'read failed');
+      if (/function .*gpa_read_snapshot.* does not exist/i.test(e0.message) || /schema cache/i.test(e0.message)) e0.code = 'MIGRATION_REQUIRED';
+      throw e0;
     }
-    // 讀取目前 revision（若 migration 尚未執行則忽略）
-    try {
-      var revRes = await client.from('gpa_user_state').select('revision').eq('user_id', userId);
-      if (revRes && !revRes.error && revRes.data && revRes.data.length) setKnownRevision(userId, revRes.data[0].revision);
-    } catch (e) { /* optional */ }
+    var data = parseRpc(res && res.data);
+    if (!data || typeof data !== 'object' ||
+        !Array.isArray(data.semesters) || !Array.isArray(data.courses) || !Array.isArray(data.assessments)) {
+      var ie = new Error('RPC invalid response (read)');
+      ie.code = 'RPC_INVALID_RESPONSE';
+      throw ie;
+    }
+    var hasState = !!data.has_state;
+    var hasData = (data.semesters.length + data.courses.length + data.assessments.length) > 0;
+    var revision = (data.revision == null) ? null : Number(data.revision);
 
-    var s = (sem && sem.data) || [], c = (cou && cou.data) || [], a = (ass && ass.data) || [];
-    if (s.length === 0 && c.length === 0 && a.length === 0) return seedState();
-    return rowsToState({ semesters: s, courses: c, assessments: a });
+    // 未知 revision：有資料但沒有 state 列 → 不允許覆蓋
+    var revisionKnown = hasState || !hasData;
+    var effectiveRevision = revisionKnown ? (hasState ? revision : 0) : null;
+
+    if (revisionKnown && effectiveRevision != null) setKnownRevision(userId, effectiveRevision);
+
+    var state = hasData
+      ? rowsToState({ semesters: data.semesters, courses: data.courses, assessments: data.assessments })
+      : seedState();
+
+    return { state: state, revision: effectiveRevision, initialized: hasState, revisionKnown: revisionKnown };
   }
 
-  // ---------- 原子快照寫入（RPC）----------
-  // 依賴 migration：public.gpa_replace_snapshot(...)，在單一交易內完成「刪除+插入」。
+  async function loadStateWithMeta(deps) {
+    if (isCloud()) return await loadCloud(deps);
+    return { state: readLocalState(), revision: null, initialized: false, revisionKnown: true };
+  }
+
+  async function loadState(deps) {
+    var m = await loadStateWithMeta(deps);
+    return m.state;
+  }
+
+  // 原子快照寫入（RPC）：p_expected_revision 必填；嚴格驗證回應
   async function persistCloud(state, deps) {
     var client = (deps && deps.client) || Auth.getClient();
     var userId = (deps && deps.userId) || (Auth.getUser() && Auth.getUser().id);
     var rows = stateToRows(state);
-    var expected = (deps && Object.prototype.hasOwnProperty.call(deps, 'expectedRevision'))
-      ? deps.expectedRevision
-      : getKnownRevision(userId);
 
+    var expected = (deps && hasOwn(deps, 'expectedRevision')) ? deps.expectedRevision : getKnownRevision(userId);
+    if (expected == null || !isFinite(Number(expected)) || Number(expected) < 0) {
+      var ue = new Error('revision unknown');
+      ue.code = 'REVISION_UNKNOWN';
+      throw ue;
+    }
+    expected = Number(expected);
+
+    // 先存本機快取 + 備份，讓同步失敗時仍可恢復
+    try { Storage.save(state); } catch (e) { /* ignore */ }
     var backup = { ok: false, error: 'not attempted' };
     try { backup = Storage.saveBackup(state, 'before-cloud-persist'); } catch (e) { backup = { ok: false, error: String(e) }; }
 
@@ -149,64 +185,59 @@
       p_semesters: rows.semesters,
       p_courses: rows.courses,
       p_assessments: rows.assessments,
-      p_expected_revision: (expected == null ? null : expected)
+      p_expected_revision: expected
     });
+
     if (res && res.error) {
       var msg = res.error.message || 'rpc failed';
       var err = new Error(msg);
-      if (/function .*gpa_replace_snapshot.* does not exist/i.test(msg) || /schema cache/i.test(msg)) {
-        err.code = 'MIGRATION_REQUIRED';
-      }
+      if (/function .*gpa_replace_snapshot.* does not exist/i.test(msg) || /schema cache/i.test(msg)) err.code = 'MIGRATION_REQUIRED';
       throw err;
     }
-    var data = (res && res.data) || {};
-    if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+    var data = parseRpc(res && res.data);
     if (data && data.conflict) {
       var ce = new Error('revision conflict');
       ce.code = 'REVISION_CONFLICT';
-      ce.currentRevision = data.current_revision;
+      ce.currentRevision = (data.current_revision == null ? null : Number(data.current_revision));
       throw ce;
     }
-    if (data && data.revision != null) setKnownRevision(userId, data.revision);
-    return { revision: data && data.revision, backup: backup };
+    // 只有 ok === true 且 revision 合法才算成功
+    if (!data || data.ok !== true || data.revision == null || !isFinite(Number(data.revision))) {
+      var ie = new Error('RPC invalid response (write)');
+      ie.code = 'RPC_INVALID_RESPONSE';
+      throw ie;
+    }
+    setKnownRevision(userId, Number(data.revision));
+    return { revision: Number(data.revision), backup: backup };
   }
 
-  // ---------- 安全合併（以 uid 為身份，重映射關聯，丟棄孤兒）----------
+  // ---------- 安全合併（uid）----------
   function mergeStates(cloudState, localState) {
     var c = ensure(cloudState);
     var l = ensure(localState);
-
     function union(a, b) {
       var map = {}, order = [];
       (a || []).forEach(function (x) { if (x.uid && !map[x.uid]) { map[x.uid] = x; order.push(x.uid); } });
       (b || []).forEach(function (x) { if (x.uid && !map[x.uid]) { map[x.uid] = x; order.push(x.uid); } });
       return order.map(function (uid) { return map[uid]; });
     }
-
     var terms = union(c.terms, l.terms);
     var courses = union(c.courses, l.courses);
     var assessments = union(c.assessments, l.assessments);
 
     var termByUid = {};
     terms.forEach(function (t) { termByUid[t.uid] = t; });
-
-    // 丟棄孤兒科目（父學期不存在）
     var keptCourses = [], droppedCourses = 0;
     courses.forEach(function (x) {
-      if (x.termUid && termByUid[x.termUid]) keptCourses.push(x);
-      else droppedCourses++;
+      if (x.termUid && termByUid[x.termUid]) keptCourses.push(x); else droppedCourses++;
     });
     var courseByUid = {};
     keptCourses.forEach(function (x) { courseByUid[x.uid] = x; });
-
-    // 丟棄孤兒評核（父科目不存在）
     var keptAssessments = [], droppedAssessments = 0;
     assessments.forEach(function (x) {
-      if (x.courseUid && courseByUid[x.courseUid]) keptAssessments.push(x);
-      else droppedAssessments++;
+      if (x.courseUid && courseByUid[x.courseUid]) keptAssessments.push(x); else droppedAssessments++;
     });
 
-    // 重新分配整數 id 並映射關聯
     terms.forEach(function (t, i) { t.id = i + 1; });
     keptCourses.forEach(function (x, i) { x.id = i + 1; x.termId = termByUid[x.termUid].id; });
     var keptCourseByUid = {};
@@ -214,20 +245,37 @@
     keptAssessments.forEach(function (x, i) { x.id = i + 1; x.courseId = keptCourseByUid[x.courseUid].id; });
 
     return {
-      version: 1,
-      terms: terms,
-      courses: keptCourses,
-      assessments: keptAssessments,
+      version: 1, terms: terms, courses: keptCourses, assessments: keptAssessments,
       orphans: { courses: droppedCourses, assessments: droppedAssessments }
     };
   }
 
-  // ---------- 統一介面 ----------
-  async function loadState(deps) {
-    if (isCloud()) return await loadCloud(deps);
-    return readLocalState();
+  // 舊資料遷移對帳：以相同 local_id 採用雲端既有 uid，避免第一次合併產生重複
+  function reconcileLocalUids(localState, cloudState) {
+    function byLocalId(arr) { var m = {}; (arr || []).forEach(function (x) { if (x && x.id != null) m[x.id] = x; }); return m; }
+    var ct = byLocalId(cloudState.terms), cc = byLocalId(cloudState.courses), ca = byLocalId(cloudState.assessments);
+    var terms = (localState.terms || []).map(function (t) {
+      var m = ct[t.id];
+      return Object.assign({}, t, { uid: (m && isUuid(m.uid)) ? m.uid : t.uid });
+    });
+    var courses = (localState.courses || []).map(function (x) {
+      var m = cc[x.id];
+      return Object.assign({}, x, {
+        uid: (m && isUuid(m.uid)) ? m.uid : x.uid,
+        termUid: (m && isUuid(m.termUid)) ? m.termUid : x.termUid
+      });
+    });
+    var assessments = (localState.assessments || []).map(function (x) {
+      var m = ca[x.id];
+      return Object.assign({}, x, {
+        uid: (m && isUuid(m.uid)) ? m.uid : x.uid,
+        courseUid: (m && isUuid(m.courseUid)) ? m.courseUid : x.courseUid
+      });
+    });
+    return ensure({ version: 1, terms: terms, courses: courses, assessments: assessments });
   }
 
+  // ---------- 統一介面 ----------
   async function persist(state, deps) {
     if (isCloud()) return await persistCloud(state, deps);
     var ok = Storage.save(state);
@@ -242,6 +290,7 @@
   return {
     isCloud: isCloud,
     loadState: loadState,
+    loadStateWithMeta: loadStateWithMeta,
     persist: persist,
     hasLocalData: hasLocalData,
     readLocalState: readLocalState,
@@ -250,6 +299,7 @@
     rowsToState: rowsToState,
     seedState: seedState,
     mergeStates: mergeStates,
+    reconcileLocalUids: reconcileLocalUids,
     getKnownRevision: getKnownRevision,
     setKnownRevision: setKnownRevision,
     _persistCloud: persistCloud,

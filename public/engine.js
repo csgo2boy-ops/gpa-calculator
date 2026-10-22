@@ -148,10 +148,19 @@
     var maxFinal = (lockedPY + ungradedWeight * PY) / PY;   // 剩餘全拿滿分的最高總分
     var securedScore = lockedPY / PY;
 
+    // --- 3b. CA/EA 雙門檻是否已「確認達標」---
+    // 分數達標並不代表合格：若 CA 或 EA 未達 40% 門檻，不得顯示「已達標」。
+    var passGate;
+    if (caStats.pass === false || eaStats.pass === false) passGate = 'fail';
+    else if (caStats.pass === 'pending' || eaStats.pass === 'pending') passGate = 'pending';
+    else passGate = 'pass';
+
     var targetStatus;
     var requiredAvg = null;
     if (securedScore >= targetMark - EPS) {
-      targetStatus = 'locked';
+      if (passGate === 'fail') targetStatus = 'threshold-failed';
+      else if (passGate === 'pending') targetStatus = 'locked-pending';
+      else targetStatus = 'locked';
     } else if (maxFinal < targetMark - EPS) {
       targetStatus = 'impossible';
     } else if (isGraded) {
@@ -190,6 +199,7 @@
       targetMark: targetMark,
       targetStatus: targetStatus,
       requiredAvg: requiredAvg,
+      passGate: passGate,
 
       // CA / EA 雙門檻
       ca: {
