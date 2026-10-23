@@ -1,6 +1,8 @@
 -- =====================================================================
 -- GPA Tracker 2.0 — Batch 1.2 SQL 測試方案（獨立、可重複、預期結果）
 -- Executable assertions: scripts/test-supabase-safety.cjs (npm run test:db).
+-- Current round: T1-T4 are user-confirmed and NOT rerun. Default is T5-T9
+-- only, without migrations/ACL changes. T10: npm run test:db:concurrency.
 -- Config, rollback and T10 cleanup: docs/supabase-safety-tests.md.
 --
 -- 重要：

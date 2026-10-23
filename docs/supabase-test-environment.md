@@ -1,5 +1,5 @@
 # 獨立 Supabase 測試環境指引（Batch 1.2 / 2.0）
-> 最新可執行測試、連線設定及 T10 清理流程請以 [supabase-safety-tests.md](supabase-safety-tests.md) 為準。已套用 001 的測試庫只需套用 001a RPC ACL 修正；不要重跑原始 schema（其 CREATE POLICY 並非冪等）。
+> 最新執行與清理方式請以 [supabase-safety-tests.md](supabase-safety-tests.md) 為準。使用者已完成權限修補及 T1–T4；本輪不要重跑任何 schema 或 Migration。預設只測 T5–T9，T10 使用獨立指令。下文為歷史建置說明，不是本輪操作步驟。
 日期：2026-10-22
 原則：只用獨立測試專案；不改正式專案；不要把高權限密鑰貼到聊天。
 

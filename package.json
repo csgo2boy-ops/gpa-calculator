@@ -8,7 +8,9 @@
     "serve": "npx --yes serve public",
     "test": "node scripts/build-rule-validator.cjs --check && node --test tests/*.test.js",
     "build:rules": "node scripts/build-rule-validator.cjs",
-    "test:db": "node scripts/test-supabase-safety.cjs"
+    "test:db": "node scripts/test-supabase-safety.cjs",
+    "test:db:concurrency": "node scripts/test-supabase-safety.cjs --concurrency",
+    "test:db:cleanup": "node scripts/test-supabase-safety.cjs --cleanup"
   },
   "keywords": [
     "gpa",

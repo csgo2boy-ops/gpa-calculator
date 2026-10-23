@@ -25,6 +25,9 @@ Thumbs.db
 db-test.local.json
 db-test-recovery.local.json
 db-test-report.local.json
+db-test-report.local.md
+db-test-*-report.local.json
+db-test-*-report.local.md
 
 # 編輯器
 .idea/
