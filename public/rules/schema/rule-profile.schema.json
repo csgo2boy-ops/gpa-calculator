@@ -1,0 +1,734 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gpa-tracker.local/schemas/rule-profile.schema.json",
+  "title": "GPA Rule Profile",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "identity",
+    "scope",
+    "profile",
+    "itemStatus",
+    "itemSources"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "institutionId",
+        "qualificationLevel",
+        "admissionYear",
+        "regulationVersion"
+      ],
+      "properties": {
+        "institutionId": {
+          "type": "string"
+        },
+        "qualificationLevel": {
+          "enum": [
+            "higher-diploma",
+            "associate-degree",
+            "bachelor"
+          ]
+        },
+        "admissionYear": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "regulationVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "scope": {
+      "enum": [
+        "institution",
+        "programme",
+        "subject"
+      ]
+    },
+    "scopeRef": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "programmeId"
+          ],
+          "properties": {
+            "programmeId": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "subjectCode"
+          ],
+          "properties": {
+            "subjectCode": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "itemStatus": {
+      "$ref": "#/$defs/itemStatus"
+    },
+    "itemSources": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "gradeScale",
+          "gradeScale.grades",
+          "gradeScale.passLetter",
+          "gradeScale.nonCountedLetters",
+          "gpaRules",
+          "gpaRules.formula",
+          "gpaRules.includeFailedCourses",
+          "gpaRules.includeExcludedCourses",
+          "gpaRules.rounding",
+          "gpaRules.rounding.method",
+          "gpaRules.rounding.dp",
+          "repeatRules",
+          "repeatRules.repeatFailedRequired",
+          "repeatRules.allowSupplementaryExam",
+          "repeatRules.repeatPassedOnlyIfRequired",
+          "repeatRules.passedRepeatedUnitsCountOnce",
+          "repeatRules.gradeReplacementPolicy",
+          "scoreToGrade",
+          "scoreToGrade.available",
+          "scoreToGrade.note",
+          "attendancePolicy",
+          "attendancePolicy.countingUnit",
+          "attendancePolicy.sessionMinutes",
+          "attendancePolicy.lateAfterMinutes",
+          "attendancePolicy.lateWeight",
+          "attendancePolicy.lateCountsAsAbsent",
+          "attendancePolicy.earlyLeaveWeight",
+          "attendancePolicy.leaveCountsAsAbsent",
+          "attendancePolicy.cancelledExcluded",
+          "attendancePolicy.attendanceThresholdPercent",
+          "attendancePolicy.absenceQuotaSessions",
+          "attendancePolicy.absenceQuotaMinutes",
+          "attendancePolicy.classTypes",
+          "attendancePolicy.riskTiers",
+          "attendancePolicy.futureTotalSessionsUnknown",
+          "assessmentPolicy",
+          "assessmentPolicy.modulePassThreshold",
+          "assessmentPolicy.formPassThreshold",
+          "assessmentPolicy.requireEaPass",
+          "applicability",
+          "applicability.excludedProgrammeIds",
+          "applicability.excludedCampuses",
+          "applicability.requiresProgrammeConfirmation"
+        ]
+      },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "url",
+            "title",
+            "accessedAt",
+            "excerpt"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "accessedAt": {
+              "type": "string"
+            },
+            "excerpt": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "status": {
+      "enum": [
+        "verified",
+        "partial",
+        "unknown",
+        "custom",
+        "deprecated"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "gradeScale": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/gradeScale"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gpaRules": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/gpaRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "repeatRules": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/repeatRules"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scoreToGrade": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/scoreToGrade"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attendancePolicy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/attendancePolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessmentPolicy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/assessmentPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "applicability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/applicability"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "gradeScale": {
+      "type": "object",
+      "properties": {
+        "grades": {
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": [
+                  "letter",
+                  "gp"
+                ],
+                "properties": {
+                  "letter": {
+                    "type": "string"
+                  },
+                  "gp": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "minMark": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "maxMark": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "maxInclusive": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "passLetter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nonCountedLetters": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "gpaRules": {
+      "type": "object",
+      "properties": {
+        "formula": {
+          "enum": [
+            "weighted-points-over-attempted-units",
+            "weighted-points-over-graded-units",
+            "unknown",
+            null
+          ]
+        },
+        "includeFailedCourses": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "includeExcludedCourses": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "rounding": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "half-up",
+                        "truncate",
+                        "none"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "dp": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "repeatRules": {
+      "type": "object",
+      "properties": {
+        "repeatFailedRequired": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "allowSupplementaryExam": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "repeatPassedOnlyIfRequired": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "passedRepeatedUnitsCountOnce": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "gradeReplacementPolicy": {
+          "anyOf": [
+            {
+              "enum": [
+                "replace",
+                "keep-best",
+                "keep-all",
+                "unknown"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "scoreToGrade": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "attendancePolicy": {
+      "type": "object",
+      "properties": {
+        "countingUnit": {
+          "enum": [
+            "session",
+            "minute",
+            "hybrid",
+            "unknown"
+          ]
+        },
+        "sessionMinutes": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "lateAfterMinutes": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "lateWeight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lateCountsAsAbsent": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "earlyLeaveWeight": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "leaveCountsAsAbsent": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cancelledExcluded": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "attendanceThresholdPercent": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "absenceQuotaSessions": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "absenceQuotaMinutes": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "classTypes": {
+          "type": "object"
+        },
+        "riskTiers": {
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "futureTotalSessionsUnknown": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "itemStatus": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "gradeScale",
+          "gradeScale.grades",
+          "gradeScale.passLetter",
+          "gradeScale.nonCountedLetters",
+          "gpaRules",
+          "gpaRules.formula",
+          "gpaRules.includeFailedCourses",
+          "gpaRules.includeExcludedCourses",
+          "gpaRules.rounding",
+          "gpaRules.rounding.method",
+          "gpaRules.rounding.dp",
+          "repeatRules",
+          "repeatRules.repeatFailedRequired",
+          "repeatRules.allowSupplementaryExam",
+          "repeatRules.repeatPassedOnlyIfRequired",
+          "repeatRules.passedRepeatedUnitsCountOnce",
+          "repeatRules.gradeReplacementPolicy",
+          "scoreToGrade",
+          "scoreToGrade.available",
+          "scoreToGrade.note",
+          "attendancePolicy",
+          "attendancePolicy.countingUnit",
+          "attendancePolicy.sessionMinutes",
+          "attendancePolicy.lateAfterMinutes",
+          "attendancePolicy.lateWeight",
+          "attendancePolicy.lateCountsAsAbsent",
+          "attendancePolicy.earlyLeaveWeight",
+          "attendancePolicy.leaveCountsAsAbsent",
+          "attendancePolicy.cancelledExcluded",
+          "attendancePolicy.attendanceThresholdPercent",
+          "attendancePolicy.absenceQuotaSessions",
+          "attendancePolicy.absenceQuotaMinutes",
+          "attendancePolicy.classTypes",
+          "attendancePolicy.riskTiers",
+          "attendancePolicy.futureTotalSessionsUnknown",
+          "assessmentPolicy",
+          "assessmentPolicy.modulePassThreshold",
+          "assessmentPolicy.formPassThreshold",
+          "assessmentPolicy.requireEaPass",
+          "applicability",
+          "applicability.excludedProgrammeIds",
+          "applicability.excludedCampuses",
+          "applicability.requiresProgrammeConfirmation"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/status"
+      }
+    },
+    "assessmentPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modulePassThreshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "formPassThreshold": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "requireEaPass": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "excludedProgrammeIds": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "excludedCampuses": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requiresProgrammeConfirmation": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "programme"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeRef": {
+            "type": "object",
+            "required": [
+              "programmeId"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "subject"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "scopeRef"
+        ],
+        "properties": {
+          "scopeRef": {
+            "type": "object",
+            "required": [
+              "subjectCode"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "projectName": "gpa-tracker-test",
+  "projectRef": "REPLACE_WITH_TEST_PROJECT_REF",
+  "confirmTestProjectRef": "REPLACE_WITH_SAME_TEST_PROJECT_REF",
+  "host": "aws-0-REGION.pooler.supabase.com",
+  "port": 5432,
+  "database": "postgres",
+  "user": "postgres.REPLACE_WITH_TEST_PROJECT_REF",
+  "password": "REPLACE_LOCALLY_ONLY"
+}

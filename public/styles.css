@@ -678,6 +678,31 @@ body {
   .empty-steps { gap: 0.5rem; }
 }
 
+/* ---------- 同步衝突 Modal ---------- */
+.target-warn { color: #b45309; font-size: 0.8125rem; font-weight: 600; }
+.reconcile-item { display: flex; gap: 0.625rem; align-items: flex-start; padding: 0.625rem; border: 1px solid var(--border-100); border-radius: 0.5rem; margin-bottom: 0.5rem; font-size: 0.8125rem; line-height: 1.5; }
+.reconcile-item input { margin-top: 0.125rem; }
+.sync-desc { font-size: 0.875rem; color: var(--text-600); line-height: 1.6; margin-bottom: 1rem; }
+.sync-options { display: flex; flex-direction: column; gap: 0.625rem; }
+.sync-options .btn { justify-content: flex-start; padding: 0.75rem 1rem; }
+
+/* ---------- 備份歷史 ---------- */
+.backup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border-100);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+.backup-meta { display: flex; flex-direction: column; gap: 0.125rem; }
+.backup-meta strong { font-size: 0.8125rem; color: var(--text-700); }
+.backup-meta span { font-size: 0.75rem; color: var(--text-400); }
+
+
 
 
 

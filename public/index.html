@@ -240,6 +240,7 @@
         <input type="file" id="import-file" accept="application/json,.json" class="hidden">
         <button id="btn-import" class="btn btn-ghost">⇪ 匯入備份</button>
         <button id="btn-export" class="btn btn-ghost">⇩ 匯出備份</button>
+        <button id="btn-restore" class="btn btn-ghost">↩ 還原備份</button>
         <button id="btn-reset" class="btn btn-ghost btn-reset">↺ 清空資料</button>
       </div>
     </header>
@@ -269,6 +270,57 @@
     <footer class="footer">
       訪客模式資料儲存於本機瀏覽器；登入後資料雲端同步，不會公開給其他使用者。
     </footer>
+  </div>
+
+  <!-- 同步衝突 Modal（保留雲端 / 保留本機 / 安全合併）-->
+  <div id="sync-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 class="modal-title">資料同步</h3>
+      </div>
+      <div class="modal-body">
+        <p class="sync-desc">偵測到本機暫存資料，而雲端也已有成績。請選擇要如何處理（不會自動覆蓋雲端）：</p>
+        <div class="sync-options">
+          <button type="button" class="btn btn-ghost" data-sync="cloud">☁ 保留雲端資料</button>
+          <button type="button" class="btn btn-ghost" data-sync="local">💾 保留本機資料（上傳覆蓋雲端）</button>
+          <button type="button" class="btn btn-primary" data-sync="merge">🔀 安全合併（不重複）</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 備份歷史 Modal（多版本、含時間戳）-->
+  <div id="backup-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="window.__gpa && window.__gpa.closeBackupModal && window.__gpa.closeBackupModal()"></div>
+    <div class="modal-card modal-wide">
+      <div class="modal-head">
+        <h3 class="modal-title">還原備份</h3>
+        <button class="icon-btn" onclick="window.__gpa && window.__gpa.closeBackupModal && window.__gpa.closeBackupModal()" title="關閉">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="sync-desc">系統會自動保留最近 5 份備份（雲端寫入前、清空、匯入、載入範本、還原前）。選擇要還原的版本：</p>
+        <div id="backup-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 舊資料對帳 Modal（保守預設＝保留本機，避免錯誤覆蓋）-->
+  <div id="reconcile-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card modal-wide">
+      <div class="modal-head">
+        <h3 class="modal-title">舊資料對帳</h3>
+      </div>
+      <div class="modal-body">
+        <p class="sync-desc">以下本機資料與雲端有相同本機編號，但內容不同。為避免錯誤覆蓋，系統預設把它們視為<b>不同資料</b>（不合併）。如確定是同一筆，請勾選「與雲端同一筆」。</p>
+        <div id="reconcile-list"></div>
+        <div class="sync-options">
+          <button type="button" class="btn btn-ghost" data-reconcile="none">全部保留本機（安全）</button>
+          <button type="button" class="btn btn-primary" data-reconcile="apply">套用選擇</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="toast-container" class="toast-container" aria-live="polite"></div>

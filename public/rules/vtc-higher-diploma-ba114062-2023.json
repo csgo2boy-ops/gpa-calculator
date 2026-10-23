@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "institutionId": "vtc",
+    "qualificationLevel": "higher-diploma",
+    "admissionYear": 2023,
+    "regulationVersion": "2023-08-ba114062"
+  },
+  "scope": "programme",
+  "scopeRef": {
+    "programmeId": "BA114062"
+  },
+  "profile": {
+    "gradeScale": {
+      "grades": [
+        {
+          "letter": "A",
+          "gp": 4,
+          "minMark": 75,
+          "maxMark": 100,
+          "maxInclusive": true
+        },
+        {
+          "letter": "A-",
+          "gp": 3.7,
+          "minMark": 70,
+          "maxMark": 75
+        },
+        {
+          "letter": "B+",
+          "gp": 3.3,
+          "minMark": 67,
+          "maxMark": 70
+        },
+        {
+          "letter": "B",
+          "gp": 3,
+          "minMark": 63,
+          "maxMark": 67
+        },
+        {
+          "letter": "B-",
+          "gp": 2.7,
+          "minMark": 60,
+          "maxMark": 63
+        },
+        {
+          "letter": "C+",
+          "gp": 2.3,
+          "minMark": 57,
+          "maxMark": 60
+        },
+        {
+          "letter": "C",
+          "gp": 2,
+          "minMark": 53,
+          "maxMark": 57
+        },
+        {
+          "letter": "C-",
+          "gp": 1.7,
+          "minMark": 50,
+          "maxMark": 53
+        },
+        {
+          "letter": "D+",
+          "gp": 1.3,
+          "minMark": 46,
+          "maxMark": 50
+        },
+        {
+          "letter": "D",
+          "gp": 1,
+          "minMark": 40,
+          "maxMark": 46
+        },
+        {
+          "letter": "F",
+          "gp": 0,
+          "minMark": 0,
+          "maxMark": 40
+        }
+      ],
+      "passLetter": "D",
+      "nonCountedLetters": []
+    },
+    "gpaRules": {
+      "formula": "unknown",
+      "includeFailedCourses": null,
+      "includeExcludedCourses": null,
+      "rounding": {
+        "method": "none",
+        "dp": 2
+      }
+    },
+    "repeatRules": {
+      "repeatFailedRequired": true,
+      "allowSupplementaryExam": false,
+      "repeatPassedOnlyIfRequired": null,
+      "passedRepeatedUnitsCountOnce": null,
+      "gradeReplacementPolicy": "unknown"
+    },
+    "scoreToGrade": {
+      "available": true,
+      "note": "Programme document provides mark range to grade table"
+    },
+    "attendancePolicy": {
+      "countingUnit": "unknown",
+      "sessionMinutes": null,
+      "lateAfterMinutes": null,
+      "lateWeight": null,
+      "lateCountsAsAbsent": null,
+      "earlyLeaveWeight": null,
+      "leaveCountsAsAbsent": null,
+      "cancelledExcluded": null,
+      "attendanceThresholdPercent": 70,
+      "absenceQuotaSessions": null,
+      "absenceQuotaMinutes": null,
+      "classTypes": {},
+      "riskTiers": null,
+      "futureTotalSessionsUnknown": null
+    },
+    "assessmentPolicy": {
+      "modulePassThreshold": 40,
+      "formPassThreshold": 40,
+      "requireEaPass": true
+    }
+  },
+  "itemStatus": {
+    "gradeScale": "partial",
+    "gpaRules": "unknown",
+    "repeatRules": "partial",
+    "scoreToGrade": "partial",
+    "attendancePolicy": "partial",
+    "assessmentPolicy": "partial"
+  },
+  "itemSources": {
+    "gradeScale": [
+      {
+        "url": "https://www.vtc.edu.hk/ive/hw/Temp/orientation/ba/114062.pdf",
+        "title": "IVE BA114062 New Student Orientation 2023 - Grades table",
+        "accessedAt": "2026-10-22",
+        "excerpt": "A 4.0 (75<=X<=100); A- 3.7 (70<=X<75); ... D 1.0 (40<=X<46); F 0.0 (0<=X<40). No grade points for Pass/Fail modules."
+      }
+    ],
+    "repeatRules": [
+      {
+        "url": "https://www.vtc.edu.hk/ive/hw/Temp/orientation/ba/114062.pdf",
+        "title": "IVE BA114062 New Student Orientation 2023 - Student Handbook",
+        "accessedAt": "2026-10-22",
+        "excerpt": "Normally no reassessment on a module basis; need to re-take the failed module. Minimum pass mark and grade: 40% and D grade; must pass End-of-Module Assessment."
+      }
+    ],
+    "attendancePolicy": [
+      {
+        "url": "https://www.vtc.edu.hk/ive/hw/Temp/orientation/ba/114062.pdf",
+        "title": "IVE BA114062 New Student Orientation 2023 - Attendance Requirement",
+        "accessedAt": "2026-10-22",
+        "excerpt": "Minimum attendance requirement for an individual module is 70%. Students not satisfying it shall not be allowed to undergo the End-of-Module Assessment nor be awarded a Module Mark/Grade."
+      }
+    ],
+    "assessmentPolicy": [
+      {
+        "url": "https://www.vtc.edu.hk/ive/hw/Temp/orientation/ba/114062.pdf",
+        "title": "BA114062 Orientation August 2023 - slide 17 Pass Requirement",
+        "accessedAt": "2026-10-23",
+        "excerpt": "Module minimum: 40% and D; each assessment form: 40%; End-of-Module Assessment must be passed."
+      }
+    ],
+    "scoreToGrade": [
+      {
+        "url": "https://www.vtc.edu.hk/ive/hw/Temp/orientation/ba/114062.pdf",
+        "title": "IVE BA114062 New Student Orientation 2023 - Grades table",
+        "accessedAt": "2026-10-22",
+        "excerpt": "A 4.0 (75<=X<=100); A- 3.7 (70<=X<75); ... D 1.0 (40<=X<46); F 0.0 (0<=X<40). No grade points for Pass/Fail modules."
+      }
+    ]
+  },
+  "notes": "Programme-level document (BA114062, IVE Haking Wong, August 2023). VTC-wide applicability of the mark ranges is not yet confirmed by a central regulation; hence gradeScale status is partial."
+}

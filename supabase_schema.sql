@@ -101,3 +101,36 @@ create policy "assessments_delete_own" on public.assessments
 -- ---------------------------------------------------------------------
 create index if not exists courses_user_id_idx on public.courses (user_id);
 create index if not exists assessments_user_id_idx on public.assessments (user_id);
+
+
+-- =====================================================================
+-- 2.0 追加：updated_at 欄位與自動更新觸發器（供衝突偵測 / 審計使用）
+--    可安全重複執行（add column if not exists / drop trigger if exists）
+-- =====================================================================
+alter table public.semesters  add column if not exists updated_at timestamptz not null default now();
+alter table public.courses    add column if not exists updated_at timestamptz not null default now();
+alter table public.assessments add column if not exists updated_at timestamptz not null default now();
+
+create or replace function public.touch_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_semesters_updated_at on public.semesters;
+create trigger trg_semesters_updated_at
+  before insert or update on public.semesters
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists trg_courses_updated_at on public.courses;
+create trigger trg_courses_updated_at
+  before insert or update on public.courses
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists trg_assessments_updated_at on public.assessments;
+create trigger trg_assessments_updated_at
+  before insert or update on public.assessments
+  for each row execute function public.touch_updated_at();
+

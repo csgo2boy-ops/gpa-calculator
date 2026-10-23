@@ -82,6 +82,41 @@ test('ITP3902 真實資料（secured 34.6 / CA 86.5% / EA pending）', () => {
   assert.strictEqual(s.requiredAvg, 67.4);
 });
 
+test('Batch 1.2：CA 80% 得 95、EA 20% 得 0 → 總分 76 但 EA 未達 40%，不得顯示已達標', () => {
+  const s = Engine.calculateCourse([a('CA', 'CA', 80, 100, 95), a('EA', 'EA', 20, 100, 0)], 'A');
+  assert.ok(Math.abs(s.secured - 76) < 1e-6);
+  assert.strictEqual(s.ca.pass, true);
+  assert.strictEqual(s.ea.pass, false);
+  assert.strictEqual(s.passGate, 'fail');
+  assert.notStrictEqual(s.targetStatus, 'locked');
+  assert.strictEqual(s.targetStatus, 'threshold-failed');
+  assert.strictEqual(s.grade, 'F');
+});
+
+test('Batch 1.2：CA 已評分、EA 待評分 → 即使分數達標也只顯示 pending', () => {
+  const s = Engine.calculateCourse([a('CA', 'CA', 70, 100, 100), a('EA', 'EA', 30, 100, null)], 'B');
+  assert.ok(Math.abs(s.secured - 70) < 1e-6);
+  assert.strictEqual(s.ca.pass, true);
+  assert.strictEqual(s.ea.pass, 'pending');
+  assert.strictEqual(s.passGate, 'pending');
+  assert.strictEqual(s.targetStatus, 'locked-pending');
+});
+
+test('Batch 1.2：CA/EA 皆達標且分數達標 → locked', () => {
+  const s = Engine.calculateCourse([a('CA', 'CA', 50, 100, 80), a('EA', 'EA', 50, 100, 80)], 'A');
+  assert.strictEqual(s.passGate, 'pass');
+  assert.strictEqual(s.targetStatus, 'locked');
+  assert.strictEqual(s.grade, 'A');
+});
+
+test('Batch 1.2：CA 未達標且目標無法達成 → impossible（不得顯示已達標）', () => {
+  const s = Engine.calculateCourse([a('CA', 'CA', 80, 100, 20), a('EA', 'EA', 20, 100, 90)], 'A');
+  assert.ok(Math.abs(s.secured - 34) < 1e-6);
+  assert.strictEqual(s.ca.pass, false);
+  assert.strictEqual(s.passGate, 'fail');
+  assert.strictEqual(s.targetStatus, 'impossible');
+});
+
 test('新舊引擎 100% 一致（隨機對照 2000 組）', () => {
   const groups = ['CA', 'EA', '作業', '專題', '考試', '其他'];
   let seed = 42;
@@ -101,6 +136,14 @@ test('新舊引擎 100% 一致（隨機對照 2000 組）', () => {
     const tg = grades[randInt(grades.length)];
     const gotNew = Engine.calculateCourse(list, tg);
     const gotLegacy = LegacyEngine.calculateCourse(list, tg);
-    assert.deepStrictEqual(gotNew, gotLegacy, 'mismatch at round ' + round + ' target ' + tg + ' list ' + JSON.stringify(list));
+    // Batch 1.2 起 targetStatus / passGate 語義已強化，只比較未變更的穩定欄位
+    const stable = function (o) {
+      return {
+        secured: o.secured, gradedWeight: o.gradedWeight, ungradedWeight: o.ungradedWeight,
+        maxFinal: o.maxFinal, isWeightValid: o.isWeightValid, isGraded: o.isGraded,
+        ca: o.ca, ea: o.ea, otherWeight: o.otherWeight, grade: o.grade, gp: o.gp
+      };
+    };
+    assert.deepStrictEqual(stable(gotNew), stable(gotLegacy), 'mismatch at round ' + round + ' target ' + tg + ' list ' + JSON.stringify(list));
   }
 });

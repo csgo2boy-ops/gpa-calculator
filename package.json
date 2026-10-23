@@ -6,7 +6,11 @@
   "type": "commonjs",
   "scripts": {
     "serve": "npx --yes serve public",
-    "test": "node tests/engine.test.js && node tests/storage.test.js && node tests/db.test.js"
+    "test": "node scripts/build-rule-validator.cjs --check && node --test tests/*.test.js",
+    "build:rules": "node scripts/build-rule-validator.cjs",
+    "test:db": "node scripts/test-supabase-safety.cjs",
+    "test:db:concurrency": "node scripts/test-supabase-safety.cjs --concurrency",
+    "test:db:cleanup": "node scripts/test-supabase-safety.cjs --cleanup"
   },
   "keywords": [
     "gpa",
@@ -17,5 +21,9 @@
     "vanilla-js",
     "gpa-calculator"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "ajv": "8.17.1",
+    "pg": "8.16.3"
+  }
 }

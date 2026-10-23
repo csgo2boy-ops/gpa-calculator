@@ -22,6 +22,12 @@ Thumbs.db
 # 環境變數
 .env
 .env.*
+db-test.local.json
+db-test-recovery.local.json
+db-test-report.local.json
+db-test-report.local.md
+db-test-*-report.local.json
+db-test-*-report.local.md
 
 # 編輯器
 .idea/
