@@ -57,4 +57,3 @@ Cleanup targets only the recorded UUID/email on the same project reference and v
 - [PostgreSQL blocking PIDs](https://www.postgresql.org/docs/current/functions-info.html)
 - [Supabase function permissions](https://supabase.com/docs/guides/database/functions)
 - [node-postgres transactions](https://node-postgres.com/features/transactions)
-

@@ -236,7 +236,7 @@ async function run(c, cleanupOnly=false) {
         await fixture(db,id);
         if(hasState)await db.query('insert into public.gpa_user_state(user_id) values($1)',[id]);
         await a.connect();await b.connect();
-        await a.query('begin');await b.query('begin');
+        await a.query('begin isolation level read committed');await b.query('begin isolation level read committed');
         for(const conn of [a,b]){await conn.query("set local statement_timeout='15s'");await claims(conn,id);}
         const pidA=(await a.query('select pg_backend_pid() pid')).rows[0].pid;
         const pidB=(await b.query('select pg_backend_pid() pid')).rows[0].pid;
@@ -289,4 +289,3 @@ if(require.main===module)main().catch(e=>{
   if(!fs.existsSync(process.env.GPA_TEST_CONFIG||path.join(root,'db-test.local.json')))console.error('Missing db-test.local.json; database tests NOT RUN.');
   process.exitCode=1;
 });
-
