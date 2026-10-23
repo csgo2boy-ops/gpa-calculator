@@ -1,5 +1,7 @@
 -- =====================================================================
 -- GPA Tracker 2.0 — Batch 1.2 SQL 測試方案（獨立、可重複、預期結果）
+-- Executable assertions: scripts/test-supabase-safety.cjs (npm run test:db).
+-- Config, rollback and T10 cleanup: docs/supabase-safety-tests.md.
 --
 -- 重要：
 --   * 只可在「測試 Supabase 專案」執行，絕不可在正式資料庫執行。
@@ -65,7 +67,8 @@ select has_function_privilege('authenticated', 'public.gpa_read_snapshot()', 'ex
 
 -- ---------------------------------------------------------------------
 -- T6. Trigger：updated_at 會在 update 時自動更新
--- 預期：updated_at 改變
+-- Corrected: now() is constant in a transaction. Executable T6 supplies a
+-- year-2000 timestamp and verifies INSERT/UPDATE replace it with transaction time.
 -- ---------------------------------------------------------------------
 -- begin;
 -- insert into public.semesters(user_id, local_id, uid, name, sort_order)
@@ -73,7 +76,7 @@ select has_function_privilege('authenticated', 'public.gpa_read_snapshot()', 'ex
 -- select updated_at as before from public.semesters where user_id='<USER_A_ID>' and local_id=900;
 -- update public.semesters set name='trigger-test-2' where user_id='<USER_A_ID>' and local_id=900;
 -- select updated_at as after from public.semesters where user_id='<USER_A_ID>' and local_id=900;
--- -- 預期：after > before
+-- -- Same-transaction after > before is NOT required; use executable T6.
 -- rollback;
 
 -- ---------------------------------------------------------------------

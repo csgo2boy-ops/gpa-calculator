@@ -230,8 +230,10 @@ from (
 on conflict (user_id) do nothing;
 
 -- 權限：只允許已登入使用者呼叫，撤銷 anon / PUBLIC
-revoke execute on function public.gpa_read_snapshot() from public;
-revoke execute on function public.gpa_replace_snapshot(jsonb, jsonb, jsonb, bigint) from public;
+-- Supabase may also have an explicit anon grant: revoking PUBLIC alone
+-- does not remove it. CREATE OR REPLACE preserves existing function ACLs.
+revoke execute on function public.gpa_read_snapshot() from anon, public;
+revoke execute on function public.gpa_replace_snapshot(jsonb, jsonb, jsonb, bigint) from anon, public;
 grant execute on function public.gpa_read_snapshot() to authenticated;
 grant execute on function public.gpa_replace_snapshot(jsonb, jsonb, jsonb, bigint) to authenticated;
 
